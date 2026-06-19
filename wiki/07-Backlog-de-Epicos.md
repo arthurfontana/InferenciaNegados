@@ -63,13 +63,15 @@ Convenções para todos:
 **Saídas:** `DS_DIAGNOSTICO` + macro vars `MIN_N`, `MIN_EVENTOS`, `Z_ALFA`, `P_CONV_GLOBAL`, `P_FPD_GLOBAL`.
 
 **Definition of Done:**
-- [ ] Métricas globais + Wilson invertido + power analysis **idênticos** ao legado (mesmos `MIN_N=230`, `MIN_EVENTOS=62` nos parâmetros validados).
-- [ ] Classificação VÁLIDA/INSTÁVEL/INVÁLIDA/VAZIA por célula.
-- [ ] Funciona em ANALITICA e SUMARIZADA (via `sum(n_*)`).
-- [ ] **Relatório HTML** (`PROC REPORT`) com: thresholds derivados, cobertura por status, % da base coberta.
-- [ ] **Bloco de explicabilidade + recomendação** automático: interpreta a cobertura, sinaliza risco (ex.: alerta PAP / grupo MÉDIA), e sugere próxima ação — texto que o usuário traz de volta para a IA.
+- [x] Métricas globais + Wilson invertido + power analysis **idênticos** ao legado (mesmos `MIN_N=230`, `MIN_EVENTOS=62` nos parâmetros validados).
+- [x] Classificação VÁLIDA/INSTÁVEL/INVÁLIDA/VAZIA por célula.
+- [x] Funciona em ANALITICA e SUMARIZADA (via `sum(n_*)`).
+- [x] **Relatório HTML** (`PROC REPORT`) com: thresholds derivados, cobertura por status, % da base coberta.
+- [x] **Bloco de explicabilidade + recomendação** automático: interpreta a cobertura, sinaliza risco (ex.: alerta PAP / grupo MÉDIA), e sugere próxima ação — texto que o usuário traz de volta para a IA.
 
 **Depende de:** E1.
+
+> ✅ **Concluído na Sessão 2** — `macros/m02_diagnostico.sas`. `%diagnostico` consome as 3 contagens do motor (`sum(n_aprovados/n_convertidos/n_maus)` → idêntico em ANALITICA/SUMARIZADA; `having sum(n_aprovados)>0` reproduz o `where FL_APROVADOS=1` do legado e evita 0/0). Blocos: (1) globais → `P_CONV_GLOBAL`/`P_FPD_GLOBAL`; (2) Wilson invertido + power analysis **verbatim** → exporta `MIN_N`/`MIN_EVENTOS`/`Z_ALFA` como **GLOBAIS** (`call symputx(...,'G')`, essencial p/ a Fase 1 enxergar); (3) IC de Wilson por célula (fórmulas idênticas, `calculated`); (4) classificação VÁLIDA/INSTÁVEL/INVÁLIDA/VAZIA; (5) `PROC REPORT` de cobertura (células + volume aprovado + % da base por status); (6) **explicabilidade**: risco de fallback por dimensão colapsável (última de `VAR_SEG`) que aflora o problema do PAP dinamicamente, + recomendações textuais (cobertura, thresholds, próxima ação); (7) `FASE0_THRESHOLDS` permanente. Math conferida fora do SAS: 0.40/0.07/0.75 → `MIN_N=230`, `MIN_EVENTOS=62` (binding = power analysis do FPD). Escrito em **ASCII puro** (sem acentos) p/ neutralizar o risco de encoding, igual ao m00/m01.
 
 ---
 
@@ -82,13 +84,15 @@ Convenções para todos:
 **Saídas:** `DS_TABELA_REF` com `taxa_conversao_ref`, `taxa_fpd_ref`, ICs de Wilson, `nivel_usado`, `confiabilidade`.
 
 **Definition of Done:**
-- [ ] Reaproveita `monta_niveis`, `agrega_nivel`, `loop_niveis`, `empilha_niveis`, `empilha_validos`, `prefix_vars`, `join_cond`, `seleciona_melhor_nivel`, `deriva_k`, `extrapola_caudas`.
-- [ ] Fallback hierárquico **nunca colapsa o score**; colapsa da direita para a esquerda.
-- [ ] Extrapolação exponencial `FPD = FPD_âncora × exp(k·dist)`; ICs propagados proporcionalmente à âncora.
-- [ ] ICs **sem sufixo `_ref`** (compatível com Fase 2).
-- [ ] Relatório HTML de confiabilidade (ALTA/MÉDIA/BAIXA/EXTRAPOLADO).
+- [x] Reaproveita `monta_niveis`, `agrega_nivel`, `loop_niveis`, `empilha_niveis`, `empilha_validos`, `prefix_vars`, `join_cond`, `seleciona_melhor_nivel`, `deriva_k`, `extrapola_caudas`.
+- [x] Fallback hierárquico **nunca colapsa o score**; colapsa da direita para a esquerda.
+- [x] Extrapolação exponencial `FPD = FPD_âncora × exp(k·dist)`; ICs propagados proporcionalmente à âncora.
+- [x] ICs **sem sufixo `_ref`** (compatível com Fase 2).
+- [x] Relatório HTML de confiabilidade (ALTA/MÉDIA/BAIXA/EXTRAPOLADO).
 
 **Depende de:** E1, E2.
+
+> ✅ **Concluído na Sessão 2** — `macros/m03_tabela_referencia.sas`. As 10 macros auxiliares do legado (`monta_niveis`, `agrega_nivel`, `loop_niveis`, `empilha_niveis`, `empilha_validos`, `prefix_vars`, `join_cond`, `seleciona_melhor_nivel`, `deriva_k`, `extrapola_caudas`) foram portadas **verbatim** na lógica; só `agrega_nivel` mudou a fonte de contagem (`sum(n_*)` + `having sum(n_aprovados)>0` no lugar de `count(*)`/`where FL_APROVADOS=1`) — idêntico em ANALITICA/SUMARIZADA. A driver `%tabela_referencia` monta o contexto (nomes do legado em **macro vars GLOBAIS** p/ as auxiliares e p/ que `ANCORA_*`/`K_EXP_DERIVADO`, setadas dentro das macros via `INTO`, sobrevivam até os relatórios) e chama tudo na ordem. Mantidos: score (1ª var) **nunca** colapsado; fallback colapsa da direita p/ a esquerda; join hierárquico por **todas** as vars do nível; toda geração com `%do` **dentro** de `%macro` (armadilha do `%DO` em open code); extrapolação `FPD = FPD_âncora·exp(k·dist)` com ICs proporcionais à âncora; ICs **sem** sufixo `_ref`; `confiabilidade` ALTA/MÉDIA/BAIXA/EXTRAPOLADO; `PROC REPORT` final de confiabilidade. Pré-requisito validado via `%valida_fase0` (aborta se faltarem `MIN_N`/`MIN_EVENTOS`/`Z_ALFA`). Escrito em **ASCII puro**.
 
 ---
 
