@@ -44,6 +44,57 @@ options validvarname=v7;
 
 
 /* ============================================================================
+   PARAMETROS DE ENTRADA  (edite aqui - NAO precisa mexer nas macros)
+   ----------------------------------------------------------------------------
+   Tudo que antes ficava "chumbado" dentro das macros esta exposto abaixo como
+   macro variavel, ja com o valor PADRAO validado setado. Voce NAO precisa
+   alterar nada: rode como esta. Os comentarios dizem o que cada parametro faz,
+   o efeito de mexer e uma FAIXA sugerida, caso queira testar a sensibilidade
+   (use a macro %validar_confianca, no fim do arquivo, p/ medir o efeito).
+
+   As macros mantem esses mesmos defaults internamente (rede de seguranca). O
+   bloco de EXEMPLO no fim do arquivo le os valores definidos aqui.
+   ============================================================================ */
+
+/* --- 1) Mapeamento das colunas da base (nomes reais; NAO e "tuning") ------- */
+%let VAR_SEG         = SCORE_HVI3 IDENTIFICA_GRUPO_MODELO CANAL_PCO_AJUSTADO;
+   /* Variaveis de segmentacao e a ORDEM (a ordem importa). A 1a (SCORE) e a
+      ANCORA: nunca e colapsada. A ULTIMA (CANAL) e a 1a a ser descartada no
+      fallback hierarquico.
+      EFEITO: mais variaveis  -> celulas mais especificas, porem menores (mais
+              propostas caem no fallback / GLOBAL, menos granularidade efetiva).
+              menos variaveis -> celulas maiores e mais estaveis, menos detalhe.
+              a ORDEM define o que se perde primeiro ao colapsar.
+      FAIXA : 2 a 4 variaveis. A 1a TEM de ser o score. */
+
+%let COL_APROVADOS   = FL_APROVADOS;          /* flag 0/1 ou contagem de aprovados */
+%let COL_CONVERTIDOS = FL_ALTAS;              /* flag 0/1 ou contagem de altas      */
+%let COL_MAUS        = fl_atrs_parc_over_30;  /* flag 0/1 ou contagem de maus (FPD) */
+
+/* --- 2) Thresholds estatisticos (o "tuning" de verdade) -------------------- */
+%let MIN_N           = 230;
+   /* Minimo de APROVADOS para a celula ser usada no seu nivel; abaixo disso ela
+      colapsa para o nivel acima (menos granular) ou, em ultimo caso, p/ o GLOBAL.
+      EFEITO: aumentar  -> premissas mais robustas/estaveis, porem MAIS colapso
+              (perde granularidade; mais propostas herdam taxa de niveis amplos).
+              diminuir  -> mais granularidade, porem risco de premissa apoiada em
+              pouca amostra (ruido).
+      FAIXA sugerida: 100 a 500.  Validado: 230. */
+
+%let MIN_EVENTOS     = 62;
+   /* Minimo de MAUS (eventos de FPD) para a celula ter FPD confiavel. Protege a
+      taxa de inadimplencia de ser estimada sobre pouquissimos maus.
+      EFEITO: aumentar  -> FPD por celula mais confiavel, porem mais colapso.
+              diminuir  -> FPD mais granular, porem ruidoso em celulas pequenas.
+      Regra de bolso: ~ MIN_N x FPD_global  (FPD global ~27% => ~62).
+      FAIXA sugerida: 30 a 120.  Validado: 62. */
+
+/* --- 3) Operacao das macros ------------------------------------------------ */
+%let MODO            = ANALITICA;  /* ANALITICA (1 linha/proposta) ou SUMARIZADA */
+%let BACKTEST        = AUTO;       /* AUTO | SIM | NAO (so roda se houver reais)  */
+
+
+/* ============================================================================
    MACRO 1 - %gerar_inferencia
    ----------------------------------------------------------------------------
    ds_base         base com as variaveis de segmentacao e as 3 colunas abaixo.
@@ -323,39 +374,234 @@ options validvarname=v7;
 
 
 /* ============================================================================
-   EXEMPLO DE USO (descomente e ajuste os nomes):
+   MACRO 3 (OPCIONAL) - %validar_confianca
+   ----------------------------------------------------------------------------
+   Roda a inferencia COMPLETA (gerar + aplicar como backtest) sobre a base
+   historica observada e mede se o resultado e confiavel:
+     - cobertura por confiabilidade (% de aprovados com premissa ALTA / GLOBAL);
+     - desvio inferido x real, de ALTAS e de FPD.
+   Imprime um VEREDITO (CONFIAVEL / ATENCAO / REVISAR) e RECOMENDACOES ligadas
+   aos parametros - inclusive se vale a pena mexer em MIN_N / MIN_EVENTOS.
+
+   E OPCIONAL: serve p/ dar seguranca ANTES de simular. Nao altera o fluxo - usa
+   datasets temporarios em WORK e nao toca nas suas bases.
+
+   ds_base         base historica observada (com aprovados, altas e maus reais).
+   var_seg/col_*/min_n/min_eventos : default = bloco de PARAMETROS do topo.
+   sensibilidade   NAO (default) | SIM. Se SIM, re-roda variando MIN_N e
+                   MIN_EVENTOS (fatores 0.5 / 1.5 / 2.0 do valor atual) e mostra
+                   uma tabela comparativa - responde na pratica a pergunta
+                   "e se eu aumentar/diminuir esse parametro, melhora?".
+
+   SAIDA: prints no log + dataset work._vc_res (1 linha por cenario testado).
+   ============================================================================ */
+%macro validar_confianca(
+    ds_base=,
+    var_seg=&VAR_SEG,
+    col_aprovados=&COL_APROVADOS,
+    col_convertidos=&COL_CONVERTIDOS,
+    col_maus=&COL_MAUS,
+    min_n=&MIN_N,
+    min_eventos=&MIN_EVENTOS,
+    sensibilidade=NAO
+);
+
+    %local peso _apr _alr _ali _mar _mai _cobA _cobG
+           cob_alta cob_glob fpd_real fpd_inf dev_fpd dev_alt adev_fpd
+           veredito f fator min_n_try min_eve_try;
+    %let peso = &col_aprovados;
+
+    %if %length(&ds_base)=0 %then %do;
+        %put ERROR: validar_confianca - ds_base e obrigatorio.;
+        %return;
+    %end;
+
+    /* helper interno: roda 1 cenario e empilha as metricas em work._vc_res.
+       Le ds_base/var_seg/col_*/peso do escopo da macro mae; escreve as somas
+       nas macro vars _apr.._cobG (locais da macro mae). */
+    %macro _vc_eval(p_min_n, p_min_eve, p_cenario);
+        %gerar_inferencia(
+            ds_base=&ds_base, var_seg=&var_seg, col_aprovados=&col_aprovados,
+            col_convertidos=&col_convertidos, col_maus=&col_maus,
+            ds_ref=work._vc_ref, min_n=&p_min_n, min_eventos=&p_min_eve);
+
+        %aplicar_inferencia(
+            ds_novo=&ds_base, ds_ref=work._vc_ref, var_seg=&var_seg,
+            ds_out=work._vc_out, col_aprovados=&col_aprovados, modo=ANALITICA,
+            col_convertidos=&col_convertidos, col_maus=&col_maus, backtest=NAO);
+
+        proc sql noprint;
+            select
+                sum(&peso),
+                sum(&col_convertidos),
+                sum(fisico_altas),
+                sum(&col_maus),
+                sum(fisico_maus),
+                sum(case when confiabilidade_premissa='ALTA'   then &peso else 0 end),
+                sum(case when confiabilidade_premissa='GLOBAL' then &peso else 0 end)
+            into :_apr trimmed, :_alr trimmed, :_ali trimmed,
+                 :_mar trimmed, :_mai trimmed, :_cobA trimmed, :_cobG trimmed
+            from work._vc_out where prob_conversao is not null;
+        quit;
+
+        data _vc_row;
+            length cenario $20;
+            cenario          = "&p_cenario";
+            min_n            = &p_min_n;
+            min_eventos      = &p_min_eve;
+            aprovados        = &_apr;
+            cobertura_alta   = &_cobA / &_apr;
+            cobertura_global = &_cobG / &_apr;
+            fpd_real         = &_mar / &_alr;
+            fpd_inf          = &_mai / &_ali;
+            desvio_fpd       = (&_mai/&_ali - &_mar/&_alr) / (&_mar/&_alr);
+            desvio_altas     = (&_ali - &_alr) / &_alr;
+            format cobertura_alta cobertura_global fpd_real fpd_inf
+                   desvio_fpd desvio_altas percent8.2  aprovados comma20.;
+            label cenario          = "Cenario"
+                  min_n            = "MIN_N"
+                  min_eventos      = "MIN_EVENTOS"
+                  aprovados        = "Aprovados c/ premissa"
+                  cobertura_alta   = "% aprov. premissa ALTA"
+                  cobertura_global = "% aprov. premissa GLOBAL"
+                  fpd_real         = "FPD real"
+                  fpd_inf          = "FPD inferido"
+                  desvio_fpd       = "Desvio rel. FPD (inf-real)"
+                  desvio_altas     = "Desvio rel. altas (inf-real)";
+        run;
+
+        proc append base=work._vc_res data=_vc_row force; run;
+    %mend _vc_eval;
+
+    proc datasets library=work nolist; delete _vc_res; quit;
+
+    /* ---- cenario ATUAL (parametros vigentes) ---- */
+    %_vc_eval(&min_n, &min_eventos, ATUAL);
+
+    %if %length(&_apr)=0 %then %let _apr = 0;
+    %if &_apr = 0 %then %do;
+        %put ERROR: validar_confianca - base sem aprovados com premissa. Verifique ds_base e as colunas.;
+        %return;
+    %end;
+
+    %let cob_alta = %sysevalf(&_cobA/&_apr);
+    %let cob_glob = %sysevalf(&_cobG/&_apr);
+    %let fpd_real = %sysevalf(&_mar/&_alr);
+    %let fpd_inf  = %sysevalf(&_mai/&_ali);
+    %let dev_fpd  = %sysevalf((&fpd_inf-&fpd_real)/&fpd_real);
+    %let dev_alt  = %sysevalf((&_ali-&_alr)/&_alr);
+    %let adev_fpd = %sysfunc(abs(&dev_fpd));
+
+    %if %sysevalf(&adev_fpd <= 0.05) and %sysevalf(&cob_alta >= 0.90) %then
+        %let veredito = CONFIAVEL;
+    %else %if %sysevalf(&adev_fpd <= 0.10) and %sysevalf(&cob_alta >= 0.80) %then
+        %let veredito = ATENCAO;
+    %else
+        %let veredito = REVISAR;
+
+    %put;
+    %put NOTE: ============================================================;
+    %put NOTE: VALIDACAO DE CONFIANCA - cenario ATUAL;
+    %put NOTE:   MIN_N=&min_n  MIN_EVENTOS=&min_eventos;
+    %put NOTE:   VAR_SEG=&var_seg;
+    %put NOTE: ------------------------------------------------------------;
+    %put NOTE:   Cobertura premissa ALTA  : %sysfunc(putn(&cob_alta,percent8.2));
+    %put NOTE:   Cobertura premissa GLOBAL: %sysfunc(putn(&cob_glob,percent8.2));
+    %put NOTE:   FPD real : %sysfunc(putn(&fpd_real,percent8.2))   FPD inferido: %sysfunc(putn(&fpd_inf,percent8.2));
+    %put NOTE:   Desvio relativo FPD  : %sysfunc(putn(&dev_fpd,percent8.2));
+    %put NOTE:   Desvio relativo altas: %sysfunc(putn(&dev_alt,percent8.2));
+    %put NOTE: ------------------------------------------------------------;
+    %put NOTE:   VEREDITO: &veredito;
+    %put NOTE: ============================================================;
+
+    /* ---- recomendacoes (ligadas aos parametros) ---- */
+    %put NOTE: RECOMENDACOES:;
+    %if &veredito = CONFIAVEL %then %do;
+        %put NOTE:  - Resultado dentro do esperado. Parametros validados (230/62) ok.;
+        %put NOTE:  - Quer MAIS granularidade? Teste MIN_N/MIN_EVENTOS menores (ex.: 150/40);
+        %put NOTE:    rodando com sensibilidade=SIM p/ comparar antes de adotar.;
+    %end;
+    %else %do;
+        %if %sysevalf(&cob_alta < 0.90) %then %do;
+            %put WARNING:  - Cobertura ALTA baixa (%sysfunc(putn(&cob_alta,percent8.2))): muita proposta;
+            %put WARNING:    herdando premissa de niveis amplos. Tente DIMINUIR MIN_N/MIN_EVENTOS;
+            %put WARNING:    (ex.: 150/40) ou reduzir o numero de variaveis em VAR_SEG.;
+        %end;
+        %if %sysevalf(&adev_fpd > 0.05) %then %do;
+            %put WARNING:  - Desvio de FPD alto (%sysfunc(putn(&dev_fpd,percent8.2))): premissa de;
+            %put WARNING:    inadimplencia instavel. Tente AUMENTAR MIN_EVENTOS (ex.: 90) p/ estabilizar,;
+            %put WARNING:    ou revisar a segmentacao (o canal PAP e um caso conhecido - ver CONTEXTO.md).;
+        %end;
+        %put NOTE:  - Rode com sensibilidade=SIM p/ ver o efeito real de cada ajuste.;
+    %end;
+
+    /* ---- sensibilidade (opcional): varia os thresholds e compara ---- */
+    %if %upcase(&sensibilidade)=SIM %then %do;
+        %put NOTE: ----- sensibilidade: variando MIN_N / MIN_EVENTOS -----;
+        %do f=1 %to 3;
+            %let fator       = %scan(0.5 1.5 2.0, &f, %str( ));
+            %let min_n_try   = %sysfunc(round(%sysevalf(&min_n*&fator)));
+            %let min_eve_try = %sysfunc(round(%sysevalf(&min_eventos*&fator)));
+            %_vc_eval(&min_n_try, &min_eve_try, FATOR_&fator);
+        %end;
+    %end;
+
+    title "VALIDACAO DE CONFIANCA - cenarios (ATUAL = parametros vigentes)";
+    proc print data=work._vc_res noobs label; run;
+    title;
+
+    proc datasets library=work nolist; delete _vc_ref _vc_out _vc_row; quit;
+    %put NOTE: ===== validar_confianca: tabela comparativa -> work._vc_res =====;
+
+%mend validar_confianca;
+
+
+/* ============================================================================
+   EXEMPLO DE USO (descomente e ajuste os nomes).
+   Os parametros vem do bloco "PARAMETROS DE ENTRADA" do topo do arquivo, entao
+   aqui voce so aponta as BASES. P/ mudar thresholds/segmentacao, edite la em cima.
 
    LIBNAME INF "/sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/INFERENCIA";
 
    * 1) Gerar a tabela de referencia a partir da base historica observada;
    %gerar_inferencia(
        ds_base         = INF.BASE_MODELAGEM_AM,
-       var_seg         = SCORE_HVI3 IDENTIFICA_GRUPO_MODELO CANAL_PCO_AJUSTADO,
-       col_aprovados   = FL_APROVADOS,
-       col_convertidos = FL_ALTAS,
-       col_maus        = fl_atrs_parc_over_30,
-       ds_ref          = INF.TABELA_REF_MV
+       var_seg         = &VAR_SEG,
+       col_aprovados   = &COL_APROVADOS,
+       col_convertidos = &COL_CONVERTIDOS,
+       col_maus        = &COL_MAUS,
+       ds_ref          = INF.TABELA_REF_MV,
+       min_n           = &MIN_N,
+       min_eventos     = &MIN_EVENTOS
    );
 
    * 2a) Backtest: aplicar na propria base historica (tem os reais);
    %aplicar_inferencia(
        ds_novo         = INF.BASE_MODELAGEM_AM,
        ds_ref          = INF.TABELA_REF_MV,
-       var_seg         = SCORE_HVI3 IDENTIFICA_GRUPO_MODELO CANAL_PCO_AJUSTADO,
+       var_seg         = &VAR_SEG,
        ds_out          = INF.BASE_MODELAGEM_AM_INF,
-       col_aprovados   = FL_APROVADOS,
-       modo            = ANALITICA,
-       col_convertidos = FL_ALTAS,
-       col_maus        = fl_atrs_parc_over_30
+       col_aprovados   = &COL_APROVADOS,
+       modo            = &MODO,
+       col_convertidos = &COL_CONVERTIDOS,
+       col_maus        = &COL_MAUS,
+       backtest        = &BACKTEST
    );
 
    * 2b) Simulacao: aplicar na base nova (sem reais, so prob/fisico);
    %aplicar_inferencia(
        ds_novo       = INF.LOG_05_06_MV,
        ds_ref        = INF.TABELA_REF_MV,
-       var_seg       = SCORE_HVI3 IDENTIFICA_GRUPO_MODELO CANAL_PCO_AJUSTADO,
+       var_seg       = &VAR_SEG,
        ds_out        = INF.LOG_05_06_MV_INF,
-       col_aprovados = FL_APROVADOS,
-       modo          = ANALITICA
+       col_aprovados = &COL_APROVADOS,
+       modo          = &MODO
+   );
+
+   * 3) OPCIONAL - validar a confianca antes de simular (gera + aplica + mede).
+        sensibilidade=SIM tambem testa MIN_N/MIN_EVENTOS maiores e menores;
+   %validar_confianca(
+       ds_base       = INF.BASE_MODELAGEM_AM,
+       sensibilidade = SIM
    );
    ============================================================================ */
