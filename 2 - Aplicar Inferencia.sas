@@ -1,4 +1,3 @@
-LIBNAME ART "/sasdata/Credito_Estudos/POL/ARTHUR_FONTANA";
 LIBNAME INF "/sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/INFERENCIA";
 LIBNAME LOG_NOVO "/sasdata/Credito/LOGS_PCO/B2C/";
 
@@ -580,7 +579,7 @@ quit;
 %let VAR_FPD_PROJ  = prob_fpd;
 
 data &DS_OUTPUT_FASE2.;
-/*data ART.BASE_SRS_GS_TRATADA_INF;*/
+/*data INF.BASE_SRS_GS_TRATADA_INF;*/
     set WORK._JOIN_ATUAL;
 
     prob_mau = _conv_n1 * _fpd_n1;
