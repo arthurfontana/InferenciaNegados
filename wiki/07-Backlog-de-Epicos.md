@@ -1,0 +1,140 @@
+# 7. Backlog de Épicos
+
+Cada épico = 1 macro/arquivo. Construir na ordem (dependências indicadas). Toda macro é **agnóstica à base** (parâmetros vêm do master) e a lógica estatística é **idêntica** ao legado.
+
+Convenções para todos:
+- Cabeçalho do arquivo com: objetivo, parâmetros esperados, pré-requisitos, saídas.
+- Encoding **Latin-1** preservado nos `.sas`.
+- Fechar todos os blocos (`quit;`/`run;`).
+- Não cravar nome de tabela/coluna/filtro dentro da lógica.
+
+---
+
+<a id="e0"></a>
+## E0 — Setup & convenções · `macros/m00_setup.sas` · Sessão 1
+
+**Objetivo:** estabelecer o terreno comum: libnames parametrizáveis, `ODS HTML` ligado, `options validvarname=v7`, e as macro vars globais (`OBJETIVO`, `MODO_BASE`, `VAR_SEG`, `VAR_SCORE_FAIXA`).
+
+**Entradas:** valores definidos no master.
+**Saídas:** sessão SAS configurada; nenhum dataset.
+
+**Definition of Done:**
+- [ ] `%macro setup(...)` que recebe os caminhos das libraries e emite os `LIBNAME`.
+- [ ] Liga `ODS HTML` (saídas legíveis) e desliga `PUT` como canal principal.
+- [ ] Declara/valida `OBJETIVO` ∈ {REFERENCIA, INFERENCIA, COMPLETO} e `MODO_BASE` ∈ {ANALITICA, SUMARIZADA}, abortando com mensagem clara se inválido.
+- [ ] Documenta no topo o inventário de parâmetros ([pág. 4](04-Inventario-de-Parametros)).
+
+**Depende de:** nada.
+
+---
+
+<a id="e1"></a>
+## E1 — Montagem da base · `macros/m01_montar_base.sas` · Sessão 1
+
+**Objetivo:** unificar o que hoje está duplicado em `0 - Gerar base...` e `2 - Aplicar...`. Ler base(s), cruzar o mau, derivar flags, fazer o **colunamento agnóstico** dos scores e **sumarizar ao grão escolhido**.
+
+**Entradas:** `DS_FONTE`, `WHERE_FONTE`, `CHAVE`, `COL_DS_PRINCIPAL`/`COL_FX_SCORE`, `COL_DS_ADICIONAL`/`COL_MODELO_ADICIONAL`, `EXPR_APROVADO`, `EXPR_ALTAS`, `DS_TARGET_MAU`/`CHAVE_MAU`/`VAR_MAU` (se REFERENCIA), `VAR_SEG`, `DIMS_SAIDA`, `MODO_BASE`.
+**Saídas:** base de modelagem pronta para o motor, com as 3 colunas de contagem (`n_aprovados`, `n_convertidos`, `n_maus`).
+
+**Definition of Done:**
+- [ ] Leitura de `DS_FONTE` (lista) com `WHERE_FONTE` parametrizado — sem meses/filtros cravados.
+- [ ] Cruzamento opcional com `DS_TARGET_MAU` por `CHAVE_MAU` (só quando há target).
+- [ ] `FL_APROVADOS`/`FL_ALTAS` derivados de `EXPR_APROVADO`/`EXPR_ALTAS`.
+- [ ] **Colunamento robusto:** PROC TRANSPOSE como hoje, mas os nomes `SCORE_*`/`ADICIONAL_*` resolvidos **automaticamente** via `dictionary.columns` (eliminar os renames com 26 underscores).
+- [ ] Normalização `CANAL_PCO_AJUSTADO` parametrizável (mapa de-para), uma vez só.
+- [ ] Geração das 3 colunas de contagem (ver [Motor Unificado](05-Motor-Unificado)).
+- [ ] `MODO_BASE=SUMARIZADA` → `GROUP BY VAR_SEG DIMS_SAIDA` somando contagens, dropando `CHAVE`/`NR_DOC`. `ANALITICA` → mantém `CHAVE`.
+- [ ] Comparar contagens totais (aprovados/altas/maus) com o legado para garantir equivalência.
+
+**Depende de:** E0.
+
+---
+
+<a id="e2"></a>
+## E2 — Diagnóstico (Fase 0) · `macros/m02_diagnostico.sas` · Sessão 2
+
+**Objetivo:** re-embrulhar a Fase 0 do `1 - Inferiencia.sas` (l. 25–515) como macro, consumindo as 3 colunas de contagem, e **trocar os `PUT` por relatório HTML** com explicabilidade e recomendação.
+
+**Entradas:** base do E1, `VAR_SEG`, `MARGEM_RELATIVA`, `ALPHA`, `PODER`.
+**Saídas:** `DS_DIAGNOSTICO` + macro vars `MIN_N`, `MIN_EVENTOS`, `Z_ALFA`, `P_CONV_GLOBAL`, `P_FPD_GLOBAL`.
+
+**Definition of Done:**
+- [ ] Métricas globais + Wilson invertido + power analysis **idênticos** ao legado (mesmos `MIN_N=230`, `MIN_EVENTOS=62` nos parâmetros validados).
+- [ ] Classificação VÁLIDA/INSTÁVEL/INVÁLIDA/VAZIA por célula.
+- [ ] Funciona em ANALITICA e SUMARIZADA (via `sum(n_*)`).
+- [ ] **Relatório HTML** (`PROC REPORT`) com: thresholds derivados, cobertura por status, % da base coberta.
+- [ ] **Bloco de explicabilidade + recomendação** automático: interpreta a cobertura, sinaliza risco (ex.: alerta PAP / grupo MÉDIA), e sugere próxima ação — texto que o usuário traz de volta para a IA.
+
+**Depende de:** E1.
+
+---
+
+<a id="e3"></a>
+## E3 — Tabela de referência (Fase 1) · `macros/m03_tabela_referencia.sas` · Sessão 2
+
+**Objetivo:** re-embrulhar a Fase 1 (`1 - Inferiencia.sas` l. 517–1409) como macro. Lógica **idêntica**.
+
+**Entradas:** base do E1, `VAR_SEG`, `VAR_SCORE_FAIXA`, `K_EXPONENCIAL`, macro vars do E2.
+**Saídas:** `DS_TABELA_REF` com `taxa_conversao_ref`, `taxa_fpd_ref`, ICs de Wilson, `nivel_usado`, `confiabilidade`.
+
+**Definition of Done:**
+- [ ] Reaproveita `monta_niveis`, `agrega_nivel`, `loop_niveis`, `empilha_niveis`, `empilha_validos`, `prefix_vars`, `join_cond`, `seleciona_melhor_nivel`, `deriva_k`, `extrapola_caudas`.
+- [ ] Fallback hierárquico **nunca colapsa o score**; colapsa da direita para a esquerda.
+- [ ] Extrapolação exponencial `FPD = FPD_âncora × exp(k·dist)`; ICs propagados proporcionalmente à âncora.
+- [ ] ICs **sem sufixo `_ref`** (compatível com Fase 2).
+- [ ] Relatório HTML de confiabilidade (ALTA/MÉDIA/BAIXA/EXTRAPOLADO).
+
+**Depende de:** E1, E2.
+
+---
+
+<a id="e4"></a>
+## E4 — Aplicar inferência (Fase 2) · `macros/m04_aplicar_inferencia.sas` · Sessão 3
+
+**Objetivo:** macro **única** da Fase 2 (hoje duplicada em arq.1 e arq.2). Enriquece a base com as premissas.
+
+**Entradas:** `DS_NOVO`, `DS_TABELA_REF`, `VAR_SEG`, `VAR_SCORE_FAIXA`, `MODO_BASE`, `FL_MANTER_ORIG`, `DS_OUTPUT_INF`.
+**Saídas:** base enriquecida com `prob_conversao`, `prob_fpd`, `prob_mau`/físicos, `nivel_premissa`, `confiabilidade_premissa`, ICs.
+
+**Definition of Done:**
+- [ ] Reaproveita `join_hierarquico` (cascata por nível).
+- [ ] **ANALITICA:** join linha a linha (como hoje), `prob_mau = prob_conv × prob_fpd`.
+- [ ] **SUMARIZADA:** `físico_altas = n_aprovados × conv`, `físico_maus = n_aprovados × conv × fpd` (ver [Motor Unificado](05-Motor-Unificado)).
+- [ ] Flag `fl_sem_premissa` para propostas/células sem match.
+- [ ] Backtest opcional (real × inferido) quando `OBJETIVO=REFERENCIA`, respeitando as regras de ouro.
+- [ ] Relatório HTML de cobertura das premissas.
+
+**Depende de:** E3 (tabela de referência existente).
+
+---
+
+<a id="e5"></a>
+## E5 — Exportar · `macros/m05_exportar.sas` · Sessão 3
+
+**Objetivo:** sumarização final por `DIMS_SAIDA` + `PROC EXPORT` CSV para o simulador externo.
+
+**Entradas:** base do E4, `DIMS_SAIDA`, `CAMINHO_CSV`.
+**Saídas:** dataset sumarizado + arquivo CSV (delimitador `;`).
+
+**Definition of Done:**
+- [ ] `GROUP BY DIMS_SAIDA` com `SUM(FL_PROPOSTA)`, `SUM(FL_APROVADOS)`, `SUM(prob_conversao/físico_altas)`, `SUM(prob_mau/físico_maus)`.
+- [ ] **Não** multiplicar somas entre si (regra de ouro 4).
+- [ ] `PROC EXPORT` para `CAMINHO_CSV` parametrizado, `dbms=csv`, `delimiter=';'`.
+
+**Depende de:** E4.
+
+---
+
+<a id="e6"></a>
+## E6 — Master & integração · `00_MASTER.sas` · Sessão 3
+
+**Objetivo:** o orquestrador. `%include` de todas as macros + blocos de chamada com **exemplos preenchidos**, governados por `OBJETIVO`/`MODO_BASE`.
+
+**Definition of Done:**
+- [ ] Cabeçalho = inventário completo de parâmetros ([pág. 4](04-Inventario-de-Parametros)).
+- [ ] `%include "macros/m00_setup.sas"` … até `m05`.
+- [ ] Blocos comentados por fase, cada um com a chamada de macro de exemplo.
+- [ ] Lógica de `OBJETIVO` decide quais macros rodam.
+- [ ] Smoke test ponta a ponta documentado (o usuário roda no SASApp).
+
+**Depende de:** E0–E5.
