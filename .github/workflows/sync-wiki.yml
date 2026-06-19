@@ -1,0 +1,79 @@
+name: Sincronizar Wiki
+
+# Move/atualiza os arquivos da pasta wiki/ deste repositório
+# direto para a Wiki do GitHub (repositório <repo>.wiki.git).
+#
+# Pré-requisito: a Wiki precisa estar HABILITADA e ter ao menos
+# UMA página criada manualmente pela UI (Settings > Features > Wikis,
+# e depois "Create the first page"). Sem isso o repositório da wiki
+# ainda não existe e o clone falha.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'wiki/**'
+      - '.github/workflows/sync-wiki.yml'
+  # Permite rodar manualmente pela aba Actions.
+  workflow_dispatch:
+
+# Necessário para o GITHUB_TOKEN conseguir dar push na wiki.
+permissions:
+  contents: write
+
+# Evita duas sincronizações concorrentes sobrescrevendo uma à outra.
+concurrency:
+  group: sync-wiki
+  cancel-in-progress: false
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Publicar pasta wiki/ na Wiki do GitHub
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          WIKI_SRC="wiki"
+          if [ ! -d "$WIKI_SRC" ]; then
+            echo "::error::A pasta '$WIKI_SRC' não existe no repositório."
+            exit 1
+          fi
+
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          WIKI_REMOTE="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+          TMP_WIKI="$(mktemp -d)"
+
+          echo "Clonando a wiki de ${GITHUB_REPOSITORY}.wiki.git ..."
+          if ! git clone --depth 1 "$WIKI_REMOTE" "$TMP_WIKI" 2>/dev/null; then
+            echo "::error::Não foi possível clonar a wiki. Garanta que a Wiki está habilitada e que existe ao menos uma página criada pela interface do GitHub."
+            exit 1
+          fi
+
+          # Remove tudo que está versionado na wiki (menos a pasta .git)
+          # para que arquivos renomeados/apagados na pasta wiki/ também
+          # sumam da wiki publicada.
+          find "$TMP_WIKI" -mindepth 1 -maxdepth 1 -not -name '.git' -exec rm -rf {} +
+
+          # Copia o conteúdo atual da pasta wiki/ para o clone.
+          cp -R "$WIKI_SRC"/. "$TMP_WIKI"/
+
+          cd "$TMP_WIKI"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Nenhuma alteração para publicar na wiki."
+            exit 0
+          fi
+
+          git commit -m "Sincroniza wiki a partir de ${GITHUB_SHA::7}"
+          git push origin HEAD
+          echo "Wiki sincronizada com sucesso."
