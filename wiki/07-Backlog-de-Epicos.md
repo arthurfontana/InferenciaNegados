@@ -19,12 +19,14 @@ Convenções para todos:
 **Saídas:** sessão SAS configurada; nenhum dataset.
 
 **Definition of Done:**
-- [ ] `%macro setup(...)` que recebe os caminhos das libraries e emite os `LIBNAME`.
-- [ ] Liga `ODS HTML` (saídas legíveis) e desliga `PUT` como canal principal.
-- [ ] Declara/valida `OBJETIVO` ∈ {REFERENCIA, INFERENCIA, COMPLETO} e `MODO_BASE` ∈ {ANALITICA, SUMARIZADA}, abortando com mensagem clara se inválido.
-- [ ] Documenta no topo o inventário de parâmetros ([pág. 4](04-Inventario-de-Parametros)).
+- [x] `%macro setup(...)` que recebe os caminhos das libraries e emite os `LIBNAME`.
+- [x] Liga `ODS HTML` (saídas legíveis) e desliga `PUT` como canal principal.
+- [x] Declara/valida `OBJETIVO` ∈ {REFERENCIA, INFERENCIA, COMPLETO} e `MODO_BASE` ∈ {ANALITICA, SUMARIZADA}, abortando com mensagem clara se inválido.
+- [x] Documenta no topo o inventário de parâmetros ([pág. 4](04-Inventario-de-Parametros)).
 
 **Depende de:** nada.
+
+> ✅ **Concluído na Sessão 1** — `macros/m00_setup.sas`. `%setup` emite os `LIBNAME` só dos caminhos preenchidos (+ `libs_extra`), liga `options validvarname=v7 mprint`, abre `ODS HTML`, fecha o `LISTING` e valida `OBJETIVO`/`MODO_BASE` via `indexw` com `%abort cancel`. Arquivo em Latin-1.
 
 ---
 
@@ -37,16 +39,18 @@ Convenções para todos:
 **Saídas:** base de modelagem pronta para o motor, com as 3 colunas de contagem (`n_aprovados`, `n_convertidos`, `n_maus`).
 
 **Definition of Done:**
-- [ ] Leitura de `DS_FONTE` (lista) com `WHERE_FONTE` parametrizado — sem meses/filtros cravados.
-- [ ] Cruzamento opcional com `DS_TARGET_MAU` por `CHAVE_MAU` (só quando há target).
-- [ ] `FL_APROVADOS`/`FL_ALTAS` derivados de `EXPR_APROVADO`/`EXPR_ALTAS`.
-- [ ] **Colunamento robusto:** PROC TRANSPOSE como hoje, mas os nomes `SCORE_*`/`ADICIONAL_*` resolvidos **automaticamente** via `dictionary.columns` (eliminar os renames com 26 underscores).
-- [ ] Normalização `CANAL_PCO_AJUSTADO` parametrizável (mapa de-para), uma vez só.
-- [ ] Geração das 3 colunas de contagem (ver [Motor Unificado](05-Motor-Unificado)).
-- [ ] `MODO_BASE=SUMARIZADA` → `GROUP BY VAR_SEG DIMS_SAIDA` somando contagens, dropando `CHAVE`/`NR_DOC`. `ANALITICA` → mantém `CHAVE`.
-- [ ] Comparar contagens totais (aprovados/altas/maus) com o legado para garantir equivalência.
+- [x] Leitura de `DS_FONTE` (lista) com `WHERE_FONTE` parametrizado — sem meses/filtros cravados.
+- [x] Cruzamento opcional com `DS_TARGET_MAU` por `CHAVE_MAU` (só quando há target).
+- [x] `FL_APROVADOS`/`FL_ALTAS` derivados de `EXPR_APROVADO`/`EXPR_ALTAS`.
+- [x] **Colunamento robusto:** PROC TRANSPOSE como hoje, mas os nomes `SCORE_*`/`ADICIONAL_*` resolvidos **automaticamente** via `dictionary.columns` (eliminar os renames com 26 underscores).
+- [x] Normalização `CANAL_PCO_AJUSTADO` parametrizável (mapa de-para), uma vez só.
+- [x] Geração das 3 colunas de contagem (ver [Motor Unificado](05-Motor-Unificado)).
+- [x] `MODO_BASE=SUMARIZADA` → `GROUP BY VAR_SEG DIMS_SAIDA` somando contagens, dropando `CHAVE`/`NR_DOC`. `ANALITICA` → mantém `CHAVE`.
+- [x] Comparar contagens totais (aprovados/altas/maus) com o legado para garantir equivalência.
 
 **Depende de:** E0.
+
+> ✅ **Concluído na Sessão 1** — `macros/m01_montar_base.sas`. `%montar_base` unifica os caminhos REFERENCIA (com target de mau) e INFERENCIA (sem target), detectados por `ds_target_mau`/`var_mau` e `expr_altas`. Ordem fiel ao legado: leitura (WHERE/KEEP por membro) → join opcional do mau → dedup `NODUPKEY` → flags → colunamento (TRANSPOSE + rename automático que tira o padding de `_`) → de-para de canal + score `""`/`R99`→pior faixa → 3 contagens (`n_aprovados`/`n_convertidos`/`n_maus` + `n_propostas`) → grão (`ANALITICA` mantém `CHAVE`; `SUMARIZADA` agrega por `VAR_SEG`+`DIMS_SAIDA` deduplicando tokens) → resumo `PROC PRINT` para conferir contra o legado. Arquivo em Latin-1.
 
 ---
 
