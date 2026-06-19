@@ -105,14 +105,16 @@ Convenções para todos:
 **Saídas:** base enriquecida com `prob_conversao`, `prob_fpd`, `prob_mau`/físicos, `nivel_premissa`, `confiabilidade_premissa`, ICs.
 
 **Definition of Done:**
-- [ ] Reaproveita `join_hierarquico` (cascata por nível).
-- [ ] **ANALITICA:** join linha a linha (como hoje), `prob_mau = prob_conv × prob_fpd`.
-- [ ] **SUMARIZADA:** `físico_altas = n_aprovados × conv`, `físico_maus = n_aprovados × conv × fpd` (ver [Motor Unificado](05-Motor-Unificado)).
-- [ ] Flag `fl_sem_premissa` para propostas/células sem match.
-- [ ] Backtest opcional (real × inferido) quando `OBJETIVO=REFERENCIA`, respeitando as regras de ouro.
-- [ ] Relatório HTML de cobertura das premissas.
+- [x] Reaproveita `join_hierarquico` (cascata por nível).
+- [x] **ANALITICA:** join linha a linha (como hoje), `prob_mau = prob_conv × prob_fpd`.
+- [x] **SUMARIZADA:** `físico_altas = n_aprovados × conv`, `físico_maus = n_aprovados × conv × fpd` (ver [Motor Unificado](05-Motor-Unificado)).
+- [x] Flag `fl_sem_premissa` para propostas/células sem match.
+- [x] Backtest opcional (real × inferido) quando `OBJETIVO=REFERENCIA`, respeitando as regras de ouro.
+- [x] Relatório HTML de cobertura das premissas.
 
 **Depende de:** E3 (tabela de referência existente).
+
+> ✅ **Concluído na Sessão 3** — `macros/m04_aplicar_inferencia.sas`. A `join_hierarquico` foi **portada verbatim** do legado (cascata por nível, `LEFT JOIN`, fallback do mais granular ao mais colapsado, join por **todas** as vars do nível), agnóstica via GLOBAIS (`DS_NOVO_F2`/`DS_TABELA_REF_F2`/`VARSEG_F2`) e com a geração dinâmica de SQL **dentro** da `%macro` (armadilha do `%DO` em open code). A driver `%aplicar_inferencia` enriquece a base com `prob_conversao`/`prob_fpd` + metadados (`nivel_premissa`, `vars_premissa`, `confiabilidade_premissa`, `fl_premissa_extrapolada`, `fl_sem_premissa`, `n_*_referencia`, ICs **sem** `_ref`). **Dual-mode:** `prob_mau = prob_conv × prob_fpd` só na ANALITICA (regra de ouro 4); `fisico_altas = peso × conv` e `fisico_maus = peso × conv × fpd` nos dois modos (`peso` = `peso_fisico`, default `n_aprovados`). **Backtest** (`backtest=AUTO`, dispara quando a base tem os reais) sempre pondera por `n_aprovados` (independente de `peso_fisico`) e calcula `FPD = SUM(fisico_maus)/SUM(fisico_altas)` — respeita as 4 regras de ouro. `PROC REPORT` de cobertura por confiabilidade (células + volume). Bugs de sintaxe corrigidos antes do commit (KEEP com vírgulas/`;` solto, `%then` sem `%do`). Escrito em **ASCII puro**. **PENDÊNCIA:** semântica do físico — `n_aprovados` (DoD/Motor, sobre aprovados) × `n_propostas` (legado "2 - Aplicar", sobre todas as propostas / abertura p/ reprovados). Default = `n_aprovados`; troca por `peso_fisico=n_propostas`.
 
 ---
 
@@ -125,11 +127,13 @@ Convenções para todos:
 **Saídas:** dataset sumarizado + arquivo CSV (delimitador `;`).
 
 **Definition of Done:**
-- [ ] `GROUP BY DIMS_SAIDA` com `SUM(FL_PROPOSTA)`, `SUM(FL_APROVADOS)`, `SUM(prob_conversao/físico_altas)`, `SUM(prob_mau/físico_maus)`.
-- [ ] **Não** multiplicar somas entre si (regra de ouro 4).
-- [ ] `PROC EXPORT` para `CAMINHO_CSV` parametrizado, `dbms=csv`, `delimiter=';'`.
+- [x] `GROUP BY DIMS_SAIDA` com `SUM(FL_PROPOSTA)`, `SUM(FL_APROVADOS)`, `SUM(prob_conversao/físico_altas)`, `SUM(prob_mau/físico_maus)`.
+- [x] **Não** multiplicar somas entre si (regra de ouro 4).
+- [x] `PROC EXPORT` para `CAMINHO_CSV` parametrizado, `dbms=csv`, `delimiter=';'`.
 
 **Depende de:** E4.
+
+> ✅ **Concluído na Sessão 3** — `macros/m05_exportar.sas`. `%exportar` sumariza a base do m04 ao grão **VAR_SEG + DIMS_SAIDA** (mesma dedup de tokens do m01 sumarizado, garantindo que o grão do CSV bata com a base e com o legado) e gera o CSV (`PROC EXPORT dbms=csv delimiter=';'`). Colunas do CSV **idênticas em estrutura** ao legado: `FL_PROPOSTA`=SUM(n_propostas), `FL_APROVADOS`=SUM(n_aprovados), `PROB_CONVERSAO` e `PROB_MAU`. Métricas auto por modo (espelha o DoD): ANALITICA → `SUM(prob_conversao)`/`SUM(prob_mau)`; SUMARIZADA → `SUM(fisico_altas)`/`SUM(fisico_maus)` — **só soma, nunca `SUM×SUM`** (regra de ouro 4). `metrica_conv`/`metrica_mau` permitem sobrepor. Resumo final via `PROC PRINT` (totais + FPD agregada). Escrito em **ASCII puro**.
 
 ---
 
@@ -139,10 +143,12 @@ Convenções para todos:
 **Objetivo:** o orquestrador. `%include` de todas as macros + blocos de chamada com **exemplos preenchidos**, governados por `OBJETIVO`/`MODO_BASE`.
 
 **Definition of Done:**
-- [ ] Cabeçalho = inventário completo de parâmetros ([pág. 4](04-Inventario-de-Parametros)).
-- [ ] `%include "macros/m00_setup.sas"` … até `m05`.
-- [ ] Blocos comentados por fase, cada um com a chamada de macro de exemplo.
-- [ ] Lógica de `OBJETIVO` decide quais macros rodam.
-- [ ] Smoke test ponta a ponta documentado (o usuário roda no SASApp).
+- [x] Cabeçalho = inventário completo de parâmetros ([pág. 4](04-Inventario-de-Parametros)).
+- [x] `%include "macros/m00_setup.sas"` … até `m05`.
+- [x] Blocos comentados por fase, cada um com a chamada de macro de exemplo.
+- [x] Lógica de `OBJETIVO` decide quais macros rodam.
+- [x] Smoke test ponta a ponta documentado (o usuário roda no SASApp).
 
 **Depende de:** E0–E5.
+
+> ✅ **Concluído na Sessão 3** — `00_MASTER.sas`. Cabeçalho com os **dois interruptores** (`OBJETIVO`/`MODO_BASE`) e o **inventário completo de parâmetros** (pág. 4). PARTE A centraliza todos os `%let` (globais, segmentação, parâmetros validados 0.40/0.07/0.75, datasets de saída, montagem da base com os filtros/colunas reais do legado, gancho PAP opcional). PARTE B faz `%include` de m00..m05; PARTE C chama `%setup`; PARTE D é a `%macro pipeline` que decide o que roda por `OBJETIVO` (REFERENCIA→m01→m02→m03+backtest; INFERENCIA→m01→m04→m05; COMPLETO→tudo), com toda a lógica de `%if` **dentro** de `%macro` (armadilha do `%if`/`%do` em open code) e cada fase com sua chamada de exemplo preenchida. PARTE E documenta o **smoke test ponta a ponta** (os 3 valores de `OBJETIVO`, esperados, e a nota da semântica do físico). Toggles `RODAR_M01`/`RODAR_BACKTEST`. Escrito em **ASCII puro**.

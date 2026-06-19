@@ -1,6 +1,6 @@
 # Inferência de Negados (Vivo) — Wiki de Reconstrução
 
-> **Status:** **Sessão 2 concluída** (épicos E2 e E3: `macros/m02_diagnostico.sas` e `macros/m03_tabela_referencia.sas`; E0/E1 já prontos da Sessão 1). Reconstrução em **3 sessões**, macro por macro, conforme o [Roadmap](08-Roadmap-3-Sessoes).
+> **Status:** **Sessão 3 concluída** (épicos E4, E5 e E6: `macros/m04_aplicar_inferencia.sas`, `macros/m05_exportar.sas` e `00_MASTER.sas`; E0–E3 prontos das Sessões 1 e 2). **Reconstrução completa** — as 3 sessões fecharam a jornada `m00 → m05 + master`. Falta o smoke test ponta a ponta no SASApp do usuário. Roadmap em [Roadmap](08-Roadmap-3-Sessoes).
 >
 > Esta wiki guarda **todo o contexto, diagnóstico e arquitetura** decididos na sessão de planejamento para que cada sessão futura (memória zerada) consiga evoluir o código sem perder contexto.
 
@@ -46,8 +46,8 @@ A meta é uma jornada fluida: **um `00_MASTER.sas`** onde você define tudo uma 
 | [E1 — Montagem da base](07-Backlog-de-Epicos#e1) | `macros/m01_montar_base.sas` | 1 | ✅ feito (Sessão 1) |
 | [E2 — Diagnóstico (Fase 0)](07-Backlog-de-Epicos#e2) | `macros/m02_diagnostico.sas` | 2 | ✅ feito (Sessão 2) |
 | [E3 — Tabela de referência (Fase 1)](07-Backlog-de-Epicos#e3) | `macros/m03_tabela_referencia.sas` | 2 | ✅ feito (Sessão 2) |
-| [E4 — Aplicar inferência (Fase 2)](07-Backlog-de-Epicos#e4) | `macros/m04_aplicar_inferencia.sas` | 3 | ⬜ a fazer |
-| [E5 — Exportar](07-Backlog-de-Epicos#e5) | `macros/m05_exportar.sas` | 3 | ⬜ a fazer |
-| [E6 — Master & integração](07-Backlog-de-Epicos#e6) | `00_MASTER.sas` | 3 | ⬜ a fazer |
+| [E4 — Aplicar inferência (Fase 2)](07-Backlog-de-Epicos#e4) | `macros/m04_aplicar_inferencia.sas` | 3 | ✅ feito (Sessão 3) |
+| [E5 — Exportar](07-Backlog-de-Epicos#e5) | `macros/m05_exportar.sas` | 3 | ✅ feito (Sessão 3) |
+| [E6 — Master & integração](07-Backlog-de-Epicos#e6) | `00_MASTER.sas` | 3 | ✅ feito (Sessão 3) |
 
 > Ao concluir um épico, marque ✅ aqui e atualize a página do épico.
