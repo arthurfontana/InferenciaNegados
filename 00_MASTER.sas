@@ -123,7 +123,7 @@
 %let DS_NOVO         = &DS_BASE;                /* base a enriquecer no m04      */
 %let DS_OUTPUT_INF   = INF.BASE_MODELAGEM_AM_INF; /* saida do m04 */
 %let FL_MANTER_ORIG  = 1;
-%let PESO_FISICO     = n_aprovados;             /* n_aprovados (DoD) | n_propostas (legado) */
+%let PESO_FISICO     = n_propostas;             /* n_propostas (legado) | n_aprovados (DoD/Motor) */
 %let CAMINHO_CSV     = /sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/INFERENCIA/saida_inferencia_sum.csv;
 
 /* --- montagem da base (m01) --- */
@@ -176,7 +176,6 @@
    PARTE C - SETUP (E0): libnames, options, ODS HTML, validacao de OBJETIVO/MODO
    ============================================================================ */
 %setup(
-    lib_art      = /sasdata/Credito_Estudos/POL/ARTHUR_FONTANA,
     lib_inf      = /sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/INFERENCIA,
     lib_oned     = /sasdata/Credito/ONEDATA/FPD,
     lib_log_novo = /sasdata/Credito/LOGS_PCO/B2C/,
@@ -341,9 +340,9 @@ ods listing;
           %let OBJETIVO = COMPLETO;
         Esperado: diagnostico + referencia + enriquecimento + backtest + CSV.
 
-   OBS. SEMANTICA DO FISICO (ver cabecalho do m04/m05): no default
-   PESO_FISICO=n_aprovados, o fisico e SOBRE APROVADOS (regra de ouro 3). O
-   legado "2 - Aplicar" somava sobre TODAS as propostas (n_propostas, semantica
-   de "abertura para reprovados"). Para reproduzir exatamente o CSV legado,
-   defina %nrstr(%let PESO_FISICO = n_propostas;).
+   OBS. SEMANTICA DO FISICO (ver cabecalho do m04/m05): o default e
+   PESO_FISICO=n_propostas, compativel com o legado "2 - Aplicar" (fisico sobre
+   TODAS as propostas, incl. reprovados — semantica de abertura para reprovados).
+   Para o fisico APENAS sobre aprovados (regra de ouro 3 / DoD Motor),
+   defina %nrstr(%let PESO_FISICO = n_aprovados;).
    ============================================================================ */

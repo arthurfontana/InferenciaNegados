@@ -27,7 +27,7 @@
      DIMS_SAIDA       dimensoes extras mantidas no grao sumarizado/CSV
 
    Parametros do proprio %setup (libnames + ODS):
-     lib_art, lib_inf, lib_oned, lib_log_novo, lib_julia
+     lib_inf, lib_oned, lib_log_novo
      libs_extra   pares "NOME=caminho" adicionais, separados por |
      ods_saida    pasta para o ODS HTML (vazio = destino padrao do EG)
      ods_arquivo  nome do arquivo HTML (default inferencia_relatorios.html)
@@ -47,7 +47,6 @@
 
      %include "macros/m00_setup.sas";
      %setup(
-        lib_art      = /sasdata/Credito_Estudos/POL/ARTHUR_FONTANA,
         lib_inf      = /sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/INFERENCIA,
         lib_oned     = /sasdata/Credito/ONEDATA/FPD,
         lib_log_novo = /sasdata/Credito/LOGS_PCO/B2C/,
@@ -56,11 +55,9 @@
    ============================================================ */
 
 %macro setup(
-    lib_art      = ,
     lib_inf      = ,
     lib_oned     = ,
     lib_log_novo = ,
-    lib_julia    = ,
     libs_extra   = ,
     ods_saida    = ,
     ods_arquivo  = inferencia_relatorios.html,
@@ -79,11 +76,9 @@
     /* ---------------------------------------------------------
        2) LIBNAMEs (so emite os que vierem preenchidos)
     --------------------------------------------------------- */
-    %if %length(&lib_art)      %then %do; libname ART      "&lib_art";      %end;
     %if %length(&lib_inf)      %then %do; libname INF      "&lib_inf";      %end;
     %if %length(&lib_oned)     %then %do; libname ONED     "&lib_oned";     %end;
     %if %length(&lib_log_novo) %then %do; libname LOG_NOVO "&lib_log_novo"; %end;
-    %if %length(&lib_julia)    %then %do; libname JULIA    "&lib_julia";    %end;
 
     /* libs adicionais no formato "NOME1=caminho1|NOME2=caminho2" */
     %if %length(&libs_extra) %then %do;

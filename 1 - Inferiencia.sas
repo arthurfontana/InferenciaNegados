@@ -1,4 +1,3 @@
-LIBNAME ART "/sasdata/Credito_Estudos/POL/ARTHUR_FONTANA";
 LIBNAME INF "/sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/INFERENCIA";
 
 /* ============================================================
@@ -23,7 +22,7 @@ LIBNAME INF "/sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/INFERENCIA";
    ============================================================ */
 
 DATA WORK.BASE_SRS_GS_SUM_AMOSTRA;
-SET INF.BASE_MODELAGEM_AM /*ART.BASE_SRS_GS_SUM*/ (WHERE=(OPERACAO = "MOVEL" and SISTEMA = "AM" AND SAFRA IN (202509, 202510, 202511, 202512))); /* and ranuni(42) < 0.04));*/
+SET INF.BASE_MODELAGEM_AM /*INF.BASE_SRS_GS_SUM*/ (WHERE=(OPERACAO = "MOVEL" and SISTEMA = "AM" AND SAFRA IN (202509, 202510, 202511, 202512))); /* and ranuni(42) < 0.04));*/
 LENGTH CANAL_PCO_AJUSTADO $30;
 
 IF CANAL_PCO_DECISAO IN ("CANAIS INTERNOS",
@@ -1452,7 +1451,7 @@ quit;
 /*			%let DS_NOVO         = WORK.BASE_SRS_GS_SUM_AMOSTRA */
 					/*INDIQUE AQUI A BASE QUE SERÁ ENRIQUECIDA*/;
 /*			%let DS_TABELA_REF   = WORK.FASE1_TABELA_REF;*/
-/*			%let DS_OUTPUT_FASE2       = ART.BASE_SRS_GS_TRATADA_INF; */
+/*			%let DS_OUTPUT_FASE2       = INF.BASE_SRS_GS_TRATADA_INF; */
 					/*WORK.FASE2_BASE_ENRIQUECIDA;*/
 /*			%let LIB_OUT         = WORK;*/
 /*			%let FL_MANTER_ORIG  = 1;   */
@@ -1706,7 +1705,7 @@ quit;
    ============================================================ */
 
 data &DS_OUTPUT_FASE2.;
-/*data ART.BASE_SRS_GS_TRATADA_INF;*/
+/*data INF.BASE_SRS_GS_TRATADA_INF;*/
     set WORK._JOIN_ATUAL;
 
     /* Renomeia para nomes finais */
