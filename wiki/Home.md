@@ -1,6 +1,6 @@
 # Inferência de Negados (Vivo) — Wiki de Reconstrução
 
-> **Status:** **Sessão 1 concluída** (épicos E0 e E1: `macros/m00_setup.sas` e `macros/m01_montar_base.sas`). Reconstrução em **3 sessões**, macro por macro, conforme o [Roadmap](08-Roadmap-3-Sessoes).
+> **Status:** **Sessão 2 concluída** (épicos E2 e E3: `macros/m02_diagnostico.sas` e `macros/m03_tabela_referencia.sas`; E0/E1 já prontos da Sessão 1). Reconstrução em **3 sessões**, macro por macro, conforme o [Roadmap](08-Roadmap-3-Sessoes).
 >
 > Esta wiki guarda **todo o contexto, diagnóstico e arquitetura** decididos na sessão de planejamento para que cada sessão futura (memória zerada) consiga evoluir o código sem perder contexto.
 
@@ -44,8 +44,8 @@ A meta é uma jornada fluida: **um `00_MASTER.sas`** onde você define tudo uma 
 |---|---|---|---|
 | [E0 — Setup & convenções](07-Backlog-de-Epicos#e0) | `macros/m00_setup.sas` | 1 | ✅ feito (Sessão 1) |
 | [E1 — Montagem da base](07-Backlog-de-Epicos#e1) | `macros/m01_montar_base.sas` | 1 | ✅ feito (Sessão 1) |
-| [E2 — Diagnóstico (Fase 0)](07-Backlog-de-Epicos#e2) | `macros/m02_diagnostico.sas` | 2 | ⬜ a fazer |
-| [E3 — Tabela de referência (Fase 1)](07-Backlog-de-Epicos#e3) | `macros/m03_tabela_referencia.sas` | 2 | ⬜ a fazer |
+| [E2 — Diagnóstico (Fase 0)](07-Backlog-de-Epicos#e2) | `macros/m02_diagnostico.sas` | 2 | ✅ feito (Sessão 2) |
+| [E3 — Tabela de referência (Fase 1)](07-Backlog-de-Epicos#e3) | `macros/m03_tabela_referencia.sas` | 2 | ✅ feito (Sessão 2) |
 | [E4 — Aplicar inferência (Fase 2)](07-Backlog-de-Epicos#e4) | `macros/m04_aplicar_inferencia.sas` | 3 | ⬜ a fazer |
 | [E5 — Exportar](07-Backlog-de-Epicos#e5) | `macros/m05_exportar.sas` | 3 | ⬜ a fazer |
 | [E6 — Master & integração](07-Backlog-de-Epicos#e6) | `00_MASTER.sas` | 3 | ⬜ a fazer |
