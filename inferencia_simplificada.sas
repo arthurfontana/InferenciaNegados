@@ -374,7 +374,89 @@ options validvarname=v7;
 
 
 /* ============================================================================
-   MACRO 3 (OPCIONAL) - %validar_confianca
+   MACRO 3 - %exportar_simulador
+   ----------------------------------------------------------------------------
+   Exporta a TABELA DE REFERENCIA (saida do %gerar_inferencia) para um CSV que
+   o App Simulador de Credito consome. NAO aplica nada: so serializa as taxas
+   por celula, em TODOS os niveis hierarquicos, p/ o app fazer a cascata em
+   runtime contra a base que o usuario subir.
+
+   POR QUE SO A TABELA DE REFERENCIA (e nao uma base ja inferida):
+     A geracao das taxas (este repo, SAS) e independente da base de estudo. A
+     aplicacao (cascata + fisicos) depende de QUAL base o usuario sobe no app,
+     entao acontece la, em runtime. O contrato completo (colunas, algoritmo de
+     cascata, fisicos e regras de ouro) esta em CONTRATO_INFERENCIA.md.
+
+   ESTRUTURA DO CSV (delimitador ';', decimal '.', cabecalho = nomes das vars):
+       nivel               1=mais granular ... (n_vars+1)=GLOBAL
+       confiabilidade      ALTA / MEDIA / BAIXA / GLOBAL
+       <vars de var_seg>   chaves; nos niveis colapsados as vars descartadas
+                           ficam EM BRANCO (curinga); GLOBAL = todas em branco
+       taxa_conversao_ref  P(converte | aprovado)
+       taxa_fpd_ref        P(inadimple | converteu)
+       n_aprovados / n_convertidos / n_maus   amostra que embasa a celula
+                           (so se incluir_amostra=SIM)
+       vars_usadas         lista textual das vars do nivel (apoio/auditoria)
+
+   PARAMETROS:
+     ds_ref           tabela de referencia gerada pelo %gerar_inferencia.
+     caminho_csv      arquivo CSV de saida (ex.: .../inferencia_ref.csv).
+     var_seg          mesmas vars (mesma ordem) da geracao (default &VAR_SEG).
+     incluir_amostra  SIM (default) inclui n_aprovados/n_convertidos/n_maus;
+                      NAO exporta so as taxas + confiabilidade.
+   ============================================================================ */
+%macro exportar_simulador(
+    ds_ref=,
+    caminho_csv=,
+    var_seg=&VAR_SEG,
+    incluir_amostra=SIM
+);
+
+    %local amostra_cols n_lin;
+
+    %if %length(&ds_ref)=0 or %length(&caminho_csv)=0 %then %do;
+        %put ERROR: exportar_simulador - ds_ref e caminho_csv sao obrigatorios.;
+        %return;
+    %end;
+    %if %sysfunc(exist(&ds_ref))=0 %then %do;
+        %put ERROR: exportar_simulador - tabela de referencia &ds_ref nao existe. Rode gerar_inferencia antes.;
+        %return;
+    %end;
+
+    %if %upcase(&incluir_amostra)=SIM %then
+        %let amostra_cols = n_aprovados n_convertidos n_maus;
+    %else
+        %let amostra_cols = ;
+
+    /* reordena as colunas de forma deterministica p/ o app (retain define a
+       ordem). As vars colapsadas ficam EM BRANCO - o app as le como curinga. */
+    data work._exp_ref;
+        retain nivel confiabilidade &var_seg
+               taxa_conversao_ref taxa_fpd_ref &amostra_cols vars_usadas;
+        set &ds_ref;
+        keep nivel confiabilidade &var_seg
+             taxa_conversao_ref taxa_fpd_ref &amostra_cols vars_usadas;
+    run;
+
+    proc export data=work._exp_ref
+        outfile="&caminho_csv" dbms=csv replace;
+        delimiter=';';
+    run;
+
+    proc sql noprint;
+        select count(*) into :n_lin trimmed from work._exp_ref;
+    quit;
+
+    proc datasets library=work nolist; delete _exp_ref; quit;
+
+    %put NOTE: ===== exportar_simulador: &n_lin linhas exportadas -> &caminho_csv =====;
+    %put NOTE:       Leve este CSV + CONTRATO_INFERENCIA.md para o App Simulador.;
+
+%mend exportar_simulador;
+
+
+/* ============================================================================
+   MACRO 4 (OPCIONAL) - %validar_confianca
    ----------------------------------------------------------------------------
    Roda a inferencia COMPLETA (gerar + aplicar como backtest) sobre a base
    historica observada e mede se o resultado e confiavel:
@@ -573,6 +655,14 @@ options validvarname=v7;
        ds_ref          = INF.TABELA_REF_MV,
        min_n           = &MIN_N,
        min_eventos     = &MIN_EVENTOS
+   );
+
+   * 1b) Exportar a tabela de referencia (CSV) para o App Simulador de Credito.
+        Leve o CSV + CONTRATO_INFERENCIA.md p/ a sessao do app;
+   %exportar_simulador(
+       ds_ref      = INF.TABELA_REF_MV,
+       caminho_csv = /sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/INFERENCIA/inferencia_ref.csv,
+       var_seg     = &VAR_SEG
    );
 
    * 2a) Backtest: aplicar na propria base historica (tem os reais);
