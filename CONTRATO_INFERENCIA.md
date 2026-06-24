@@ -47,7 +47,7 @@ partir da tabela de referência que o `%gerar_inferencia` produz.
 
 > As 3 colunas de chave (`SCORE_HVI3`, `IDENTIFICA_GRUPO_MODELO`,
 > `CANAL_PCO_AJUSTADO`) são fixas hoje, mas a **ordem** delas em `var_seg`
-> define o que colapsa primeiro. Se um dia mudar a segmentação no SAS, o CSV
+> define o que colapsa primeiro, os nomes dessas variáveis e a quantidade pode alterar. Se um dia mudar a segmentação no SAS, o CSV
 > ganha/perde colunas — o app deve ler as chaves a partir do cabeçalho, não
 > assumir nomes fixos.
 
