@@ -198,6 +198,7 @@ QUIT;
 
         from &ds_in
 		where SAFRA_CNST >= &ini_safra. and SAFRA_CNST <= &fim_safra.
+          and &col_aprovados > 0  /* exclui reprovados: NEGADO tem FL_APROVADOS=0 */
         group by
         %do i=1 %to &n;
             %let var = %scan(&var_seg, &i);
@@ -487,7 +488,8 @@ QUIT;
                 sum(&col_maus)/sum(&col_convertidos)    as fpd_real    format=percent8.2,
                 sum(fisico_maus)/sum(fisico_altas)      as fpd_inf     format=percent8.2
             from &ds_out
-            where prob_conversao is not null;
+            where prob_conversao is not null
+              and &col_aprovados > 0;  /* compara so aprovados: evita fisico de negados inflar o inferido */
         quit;
         title;
     %end;
