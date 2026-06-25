@@ -1,97 +1,216 @@
+options validvarname=v7;
+LIBNAME INF "/sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/INFERENCIA";
+LIBNAME LOG_NOVO "/sasdata/Credito/LOGS_PCO/B2C/";
+LIBNAME ONED "/sasdata/Credito/ONEDATA/FPD";
+
 /* ============================================================================
-   inferencia_simplificada.sas
-
-   Versao enxuta da inferencia de negados, em DUAS macros:
-
-     %gerar_inferencia  -> gera a TABELA DE REFERENCIA (taxa de conversao e
-                           taxa de FPD observadas por celula, com fallback
-                           hierarquico).
-     %aplicar_inferencia-> APLICA a tabela de referencia em qualquer base
-                           (analitica ou sumarizada), atribuindo
-                           prob_conversao / prob_fpd / prob_mau e os fisicos.
-
-   POR QUE EXISTE (vs. o fluxo de 6 arquivos / ~6300 linhas):
-     O conceito e simples - taxa observada por agrupamento, replicada para
-     quem nao temos observacao. Esta versao mantem so o nucleo:
-       1) agrega por celula em niveis hierarquicos (colapsa da direita p/ a
-          esquerda; o SCORE - 1a var - nunca e colapsado);
-       2) usa o nivel mais granular que tenha amostra suficiente
-          (MIN_N aprovados e MIN_EVENTOS maus); senao colapsa; em ultimo
-          caso usa a media GLOBAL;
-       3) aplica via join em cascata.
-
-   O QUE FOI CORTADO de proposito (estava no fluxo antigo):
-     - Derivacao automatica de MIN_N / MIN_EVENTOS (Wilson + power analysis):
-       agora sao PARAMETROS chumbados no default (230 / 62), validados nos
-       exercicios anteriores. Para recalibrar, passe outros valores.
-     - Extrapolacao exponencial das caudas de score: substituida pela linha
-       GLOBAL de fallback (mais simples e mais honesta).
-     - Intervalos de confianca de Wilson e relatorios PROC REPORT.
-
-   DECISOES PARAMETRIZAVEIS:
-     - var_seg : lista de variaveis de segmentacao; a ORDEM importa, a 1a e a
-                 ancora (score) e nunca e colapsada. Hoje sao 3, mas pode ser
-                 qualquer lista.
-     - As 3 colunas de contagem/flag (aprovados, convertidos, maus) servem
-       tanto p/ base ANALITICA (flags 0/1; sum() vira contagem) quanto p/ base
-       SUMARIZADA (ja sao contagens). O codigo e o mesmo.
-
-   ENCODING: arquivo em ASCII puro (sem acentos) de proposito, p/ evitar
-     problemas de Latin-1/UTF-8 ao abrir no SAS.
+   GERAÇÃO DE BASES DE ENTRADA
    ============================================================================ */
 
-options validvarname=v7;
+/*FASE 1 LOG DE ENTRADA PARA GERAR TABELAS DE REFENCIAS OU APLICAÇÃO*/;
+DATA LOG;
+SET 
+LOG_NOVO.LOGS_PCO_B2C_202509 (where=(IDENTIFICA_NOVA_ARVORE = "NOVO FLUXO B2C" and ORIGEM = "AM" AND FL_DEDUP_CNL_DIA = 1) 
+	keep=LOGIN_SOLICITANTE NR_PROPOSTA NR_DOC SAFRA_CNST  DT_CNST RISCO_CEP_CALC_PCO ORIGEM CANAL_PCO_DECISAO OPERACAO TP_PEDIDO BUREAU_PCO RESTRITIVOS_SERASA RGNL_CNST DS_VAR_PRINCIPAL FAIXA_SCORE DS_VAR_ADICIONAL MODELO_ADICIONAL DECISAO_ANALISE REASON_CODE DS_REASON_CODE CD_SCORE POLITICA_NOVA IDENTIFICA_NOVA_ARVORE IDENTIFICA_GRUPO_MODELO GALHO_ARVORE FL_DEDUP_CNL_DIA)
+LOG_NOVO.LOGS_PCO_B2C_202510 (where=(IDENTIFICA_NOVA_ARVORE = "NOVO FLUXO B2C" and ORIGEM = "AM" AND FL_DEDUP_CNL_DIA = 1) 
+	keep=LOGIN_SOLICITANTE NR_PROPOSTA NR_DOC SAFRA_CNST  DT_CNST RISCO_CEP_CALC_PCO ORIGEM CANAL_PCO_DECISAO OPERACAO TP_PEDIDO BUREAU_PCO RESTRITIVOS_SERASA RGNL_CNST DS_VAR_PRINCIPAL FAIXA_SCORE DS_VAR_ADICIONAL MODELO_ADICIONAL DECISAO_ANALISE REASON_CODE DS_REASON_CODE CD_SCORE POLITICA_NOVA IDENTIFICA_NOVA_ARVORE IDENTIFICA_GRUPO_MODELO GALHO_ARVORE FL_DEDUP_CNL_DIA)
+LOG_NOVO.LOGS_PCO_B2C_202511 (where=(IDENTIFICA_NOVA_ARVORE = "NOVO FLUXO B2C" and ORIGEM = "AM" AND FL_DEDUP_CNL_DIA = 1) 
+	keep=LOGIN_SOLICITANTE NR_PROPOSTA NR_DOC SAFRA_CNST  DT_CNST RISCO_CEP_CALC_PCO ORIGEM CANAL_PCO_DECISAO OPERACAO TP_PEDIDO BUREAU_PCO RESTRITIVOS_SERASA RGNL_CNST DS_VAR_PRINCIPAL FAIXA_SCORE DS_VAR_ADICIONAL MODELO_ADICIONAL DECISAO_ANALISE REASON_CODE DS_REASON_CODE CD_SCORE POLITICA_NOVA IDENTIFICA_NOVA_ARVORE IDENTIFICA_GRUPO_MODELO GALHO_ARVORE FL_DEDUP_CNL_DIA)
+LOG_NOVO.LOGS_PCO_B2C_202512 (where=(IDENTIFICA_NOVA_ARVORE = "NOVO FLUXO B2C" and ORIGEM = "AM" AND FL_DEDUP_CNL_DIA = 1) 
+	keep=LOGIN_SOLICITANTE NR_PROPOSTA NR_DOC SAFRA_CNST  DT_CNST RISCO_CEP_CALC_PCO ORIGEM CANAL_PCO_DECISAO OPERACAO TP_PEDIDO BUREAU_PCO RESTRITIVOS_SERASA RGNL_CNST DS_VAR_PRINCIPAL FAIXA_SCORE DS_VAR_ADICIONAL MODELO_ADICIONAL DECISAO_ANALISE REASON_CODE DS_REASON_CODE CD_SCORE POLITICA_NOVA IDENTIFICA_NOVA_ARVORE IDENTIFICA_GRUPO_MODELO GALHO_ARVORE FL_DEDUP_CNL_DIA)
+LOG_NOVO.LOGS_PCO_B2C_202601 (where=(IDENTIFICA_NOVA_ARVORE = "NOVO FLUXO B2C" and ORIGEM = "AM" AND FL_DEDUP_CNL_DIA = 1) 
+	keep=LOGIN_SOLICITANTE NR_PROPOSTA NR_DOC SAFRA_CNST  DT_CNST RISCO_CEP_CALC_PCO ORIGEM CANAL_PCO_DECISAO OPERACAO TP_PEDIDO BUREAU_PCO RESTRITIVOS_SERASA RGNL_CNST DS_VAR_PRINCIPAL FAIXA_SCORE DS_VAR_ADICIONAL MODELO_ADICIONAL DECISAO_ANALISE REASON_CODE DS_REASON_CODE CD_SCORE POLITICA_NOVA IDENTIFICA_NOVA_ARVORE IDENTIFICA_GRUPO_MODELO GALHO_ARVORE FL_DEDUP_CNL_DIA)
+LOG_NOVO.LOGS_PCO_B2C_202602 (where=(IDENTIFICA_NOVA_ARVORE = "NOVO FLUXO B2C" and ORIGEM = "AM" AND FL_DEDUP_CNL_DIA = 1) 
+	keep=LOGIN_SOLICITANTE NR_PROPOSTA NR_DOC SAFRA_CNST  DT_CNST RISCO_CEP_CALC_PCO ORIGEM CANAL_PCO_DECISAO OPERACAO TP_PEDIDO BUREAU_PCO RESTRITIVOS_SERASA RGNL_CNST DS_VAR_PRINCIPAL FAIXA_SCORE DS_VAR_ADICIONAL MODELO_ADICIONAL DECISAO_ANALISE REASON_CODE DS_REASON_CODE CD_SCORE POLITICA_NOVA IDENTIFICA_NOVA_ARVORE IDENTIFICA_GRUPO_MODELO GALHO_ARVORE FL_DEDUP_CNL_DIA)
+LOG_NOVO.LOGS_PCO_B2C_202603 (where=(IDENTIFICA_NOVA_ARVORE = "NOVO FLUXO B2C" and ORIGEM = "AM" AND FL_DEDUP_CNL_DIA = 1) 
+	keep=LOGIN_SOLICITANTE NR_PROPOSTA NR_DOC SAFRA_CNST  DT_CNST RISCO_CEP_CALC_PCO ORIGEM CANAL_PCO_DECISAO OPERACAO TP_PEDIDO BUREAU_PCO RESTRITIVOS_SERASA RGNL_CNST DS_VAR_PRINCIPAL FAIXA_SCORE DS_VAR_ADICIONAL MODELO_ADICIONAL DECISAO_ANALISE REASON_CODE DS_REASON_CODE CD_SCORE POLITICA_NOVA IDENTIFICA_NOVA_ARVORE IDENTIFICA_GRUPO_MODELO GALHO_ARVORE FL_DEDUP_CNL_DIA)
+LOG_NOVO.LOGS_PCO_B2C_202604 (where=(IDENTIFICA_NOVA_ARVORE = "NOVO FLUXO B2C" and ORIGEM = "AM" AND FL_DEDUP_CNL_DIA = 1) 
+	keep=LOGIN_SOLICITANTE NR_PROPOSTA NR_DOC SAFRA_CNST  DT_CNST RISCO_CEP_CALC_PCO ORIGEM CANAL_PCO_DECISAO OPERACAO TP_PEDIDO BUREAU_PCO RESTRITIVOS_SERASA RGNL_CNST DS_VAR_PRINCIPAL FAIXA_SCORE DS_VAR_ADICIONAL MODELO_ADICIONAL DECISAO_ANALISE REASON_CODE DS_REASON_CODE CD_SCORE POLITICA_NOVA IDENTIFICA_NOVA_ARVORE IDENTIFICA_GRUPO_MODELO GALHO_ARVORE FL_DEDUP_CNL_DIA)
+LOG_NOVO.LOGS_PCO_B2C_202605 (where=(IDENTIFICA_NOVA_ARVORE = "NOVO FLUXO B2C" and ORIGEM = "AM" AND FL_DEDUP_CNL_DIA = 1) 
+	keep=LOGIN_SOLICITANTE NR_PROPOSTA NR_DOC SAFRA_CNST  DT_CNST RISCO_CEP_CALC_PCO ORIGEM CANAL_PCO_DECISAO OPERACAO TP_PEDIDO BUREAU_PCO RESTRITIVOS_SERASA RGNL_CNST DS_VAR_PRINCIPAL FAIXA_SCORE DS_VAR_ADICIONAL MODELO_ADICIONAL DECISAO_ANALISE REASON_CODE DS_REASON_CODE CD_SCORE POLITICA_NOVA IDENTIFICA_NOVA_ARVORE IDENTIFICA_GRUPO_MODELO GALHO_ARVORE FL_DEDUP_CNL_DIA)
+LOG_NOVO.LOGS_PCO_B2C_202606 (where=(IDENTIFICA_NOVA_ARVORE = "NOVO FLUXO B2C" and ORIGEM = "AM" AND FL_DEDUP_CNL_DIA = 1) 
+	keep=LOGIN_SOLICITANTE NR_PROPOSTA NR_DOC SAFRA_CNST  DT_CNST RISCO_CEP_CALC_PCO ORIGEM CANAL_PCO_DECISAO OPERACAO TP_PEDIDO BUREAU_PCO RESTRITIVOS_SERASA RGNL_CNST DS_VAR_PRINCIPAL FAIXA_SCORE DS_VAR_ADICIONAL MODELO_ADICIONAL DECISAO_ANALISE REASON_CODE DS_REASON_CODE CD_SCORE POLITICA_NOVA IDENTIFICA_NOVA_ARVORE IDENTIFICA_GRUPO_MODELO GALHO_ARVORE FL_DEDUP_CNL_DIA)
+
+/*LOG_NOVO.LOGS_PCO_B2C_202606 (where=(IDENTIFICA_NOVA_ARVORE = "NOVO FLUXO B2C" and ORIGEM = "AM" AND FL_DEDUP_CNL_DIA = 1) */
+/*	keep=LOGIN_SOLICITANTE NR_PROPOSTA NR_DOC SAFRA_CNST  DT_CNST RISCO_CEP_CALC_PCO ORIGEM CANAL_PCO_DECISAO OPERACAO TP_PEDIDO BUREAU_PCO RESTRITIVOS_SERASA RGNL_CNST DS_VAR_PRINCIPAL FAIXA_SCORE DS_VAR_ADICIONAL MODELO_ADICIONAL DECISAO_ANALISE REASON_CODE DS_REASON_CODE CD_SCORE POLITICA_NOVA IDENTIFICA_NOVA_ARVORE IDENTIFICA_GRUPO_MODELO GALHO_ARVORE FL_DEDUP_CNL_DIA)	*/
+;
+/*CRIA FLAG DE PROPOSTAS*/
+LENGTH FL_PROPOSTA 8.;
+FL_PROPOSTA = 1;
+
+/*CRIA FLAG DE APROVADOS*/
+LENGTH FL_APROVADOS 8.;
+IF DECISAO_ANALISE = "APROVADO" THEN FL_APROVADOS = 1; ELSE FL_APROVADOS = 0;
+
+/*GARANTE QUE SEMPRE TEREMOS UM SCORE VALIDO, NA AUSENCIA, CONSIDERA-SE O PIOR PARA INFERIR*/
+IF FAIXA_SCORE = "" OR FAIXA_SCORE = "R99" THEN FAIXA_SCORE = "R20";
+
+/*AJUSTA CANAIS*/
+LENGTH CANAL_PCO_AJUSTADO $30;
+IF CANAL_PCO_DECISAO IN ("CANAIS INTERNOS",
+                         "CANAL NAO MAPEADO",
+                         "INBOUND",
+                         "LOJA PROPRIA",
+                         "LOJAS PROPRIAS",
+                         "OUTROS",
+                         "RETENCAO",
+                         "REVENDA",
+                         "SINERGIA B2B2C",
+                         "WEB DEALERS",
+                         "WEB_DEALERS",
+						 "PAP",
+						 "PAP 2.0",
+						 "PAP TORDESILHAS") THEN CANAL_PCO_AJUSTADO = "OUTROS";
+
+ELSE IF CANAL_PCO_DECISAO IN ("CROSS SELLING",
+                              "CROSSELING") THEN CANAL_PCO_AJUSTADO = "CROSSELING";
+ELSE IF CANAL_PCO_DECISAO = "DIGITAL" THEN CANAL_PCO_AJUSTADO = "DIGITAL";
+ELSE IF CANAL_PCO_DECISAO = "OUTBOUND" THEN CANAL_PCO_AJUSTADO = "OUTBOUND";
+ELSE IF CANAL_PCO_DECISAO IN ("URA ATIVACAO",
+                              "URA_ATIVACAO") THEN CANAL_PCO_AJUSTADO = "URA_ATIVACAO";
+ELSE CANAL_PCO_AJUSTADO = "OUTROS"; 
+
+RUN;
+
+/*FASE 2 INADIMPLENCIA PARA INFERENCIA*/;
+DATA FPD;
+SET ONED.FPD_ONEDATA (KEEP=NR_PROPOSTA FL_ATRS_PARC_OVER_30 FL_ATRS_PARC_OVER_60 FL_FATURADO FL_REDUTOR FL_PLNO_ZERO FL_LNHA_FICT FL_DEDUP_CONTA SAFRA_ALTA);
+RUN;
+
+PROC SQL;
+CREATE TABLE LOG_FPD AS 
+SELECT 
+A.*,
+B.FL_ATRS_PARC_OVER_30,
+B.FL_ATRS_PARC_OVER_60,
+CASE WHEN (FL_FATURADO = 1 AND FL_REDUTOR = 0 AND FL_PLNO_ZERO = 0 AND FL_LNHA_FICT = 0 AND FL_DEDUP_CONTA = 1) THEN 1  ELSE 0 END AS FL_ALTAS
+FROM LOG AS A
+LEFT JOIN FPD AS B
+ON A.NR_PROPOSTA = B.NR_PROPOSTA; 
+RUN;
+/*PRECISAMOS MELHORAR ESSA PARTE, APENAS ESTAMOS SUMARIZANDO*/
+PROC SORT DATA=LOG_FPD NODUPKEY OUT=INF.LOG_FPD; BY NR_PROPOSTA; RUN;
+
+/*TABELA QUE SERÁ UTILIZADA NA SIMULAÇÃO*/
+PROC SQL;
+CREATE TABLE INF.LOG_FPD_SUM AS 
+SELECT 
+ SAFRA_CNST 
+,DT_CNST
+,RISCO_CEP_CALC_PCO 
+,ORIGEM 
+,CANAL_PCO_AJUSTADO 
+,OPERACAO 
+,TP_PEDIDO 
+,DS_VAR_PRINCIPAL 
+,FAIXA_SCORE 
+,DS_VAR_ADICIONAL 
+,MODELO_ADICIONAL 
+,DECISAO_ANALISE 
+,REASON_CODE 
+,DS_REASON_CODE 
+,IDENTIFICA_GRUPO_MODELO 
+,SUM(FL_PROPOSTA) AS FL_PROPOSTA
+,SUM(FL_APROVADOS) AS FL_APROVADOS
+,SUM(FL_ALTAS) AS FL_ALTAS
+,SUM(FL_ATRS_PARC_OVER_30) AS FL_ATRS_PARC_OVER_30
+,SUM(FL_ATRS_PARC_OVER_60) AS FL_ATRS_PARC_OVER_60
+FROM INF.LOG_FPD
+GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15;
+RUN;
+QUIT;
 
 
 /* ============================================================================
-   PARAMETROS DE ENTRADA  (edite aqui - NAO precisa mexer nas macros)
-   ----------------------------------------------------------------------------
-   Tudo que antes ficava "chumbado" dentro das macros esta exposto abaixo como
-   macro variavel, ja com o valor PADRAO validado setado. Voce NAO precisa
-   alterar nada: rode como esta. Os comentarios dizem o que cada parametro faz,
-   o efeito de mexer e uma FAIXA sugerida, caso queira testar a sensibilidade
-   (use a macro %validar_confianca, no fim do arquivo, p/ medir o efeito).
-
-   As macros mantem esses mesmos defaults internamente (rede de seguranca). O
-   bloco de EXEMPLO no fim do arquivo le os valores definidos aqui.
+   INFFERENCIAS E APLICAÇÃO PARAMETROS DE ENTRADA
    ============================================================================ */
 
 /* --- 1) Mapeamento das colunas da base (nomes reais; NAO e "tuning") ------- */
-%let VAR_SEG         = SCORE_HVI3 IDENTIFICA_GRUPO_MODELO CANAL_PCO_AJUSTADO;
-   /* Variaveis de segmentacao e a ORDEM (a ordem importa). A 1a (SCORE) e a
-      ANCORA: nunca e colapsada. A ULTIMA (CANAL) e a 1a a ser descartada no
-      fallback hierarquico.
-      EFEITO: mais variaveis  -> celulas mais especificas, porem menores (mais
-              propostas caem no fallback / GLOBAL, menos granularidade efetiva).
-              menos variaveis -> celulas maiores e mais estaveis, menos detalhe.
-              a ORDEM define o que se perde primeiro ao colapsar.
-      FAIXA : 2 a 4 variaveis. A 1a TEM de ser o score. */
+%let VAR_SEG         = FAIXA_SCORE OPERACAO IDENTIFICA_GRUPO_MODELO CANAL_PCO_AJUSTADO;
+			   /* Variaveis de segmentacao e a ORDEM (a ordem importa). A 1a (SCORE) e a
+			      ANCORA: nunca e colapsada. A ULTIMA (CANAL) e a 1a a ser descartada no
+			      fallback hierarquico.
+			      EFEITO: mais variaveis  -> celulas mais especificas, porem menores (mais
+			              propostas caem no fallback / GLOBAL, menos granularidade efetiva).
+			              menos variaveis -> celulas maiores e mais estaveis, menos detalhe.
+			              a ORDEM define o que se perde primeiro ao colapsar.
+			      FAIXA : 2 a 4 variaveis. A 1a TEM de ser o score. */
 
 %let COL_APROVADOS   = FL_APROVADOS;          /* flag 0/1 ou contagem de aprovados */
 %let COL_CONVERTIDOS = FL_ALTAS;              /* flag 0/1 ou contagem de altas      */
 %let COL_MAUS        = fl_atrs_parc_over_30;  /* flag 0/1 ou contagem de maus (FPD) */
+%let COL_PROPOSTAS	 = FL_PROPOSTA;
 
 /* --- 2) Thresholds estatisticos (o "tuning" de verdade) -------------------- */
 %let MIN_N           = 230;
-   /* Minimo de APROVADOS para a celula ser usada no seu nivel; abaixo disso ela
-      colapsa para o nivel acima (menos granular) ou, em ultimo caso, p/ o GLOBAL.
-      EFEITO: aumentar  -> premissas mais robustas/estaveis, porem MAIS colapso
-              (perde granularidade; mais propostas herdam taxa de niveis amplos).
-              diminuir  -> mais granularidade, porem risco de premissa apoiada em
-              pouca amostra (ruido).
-      FAIXA sugerida: 100 a 500.  Validado: 230. */
+			   /* Minimo de APROVADOS para a celula ser usada no seu nivel; abaixo disso ela
+			      colapsa para o nivel acima (menos granular) ou, em ultimo caso, p/ o GLOBAL.
+			      EFEITO: aumentar  -> premissas mais robustas/estaveis, porem MAIS colapso
+			              (perde granularidade; mais propostas herdam taxa de niveis amplos).
+			              diminuir  -> mais granularidade, porem risco de premissa apoiada em
+			              pouca amostra (ruido).
+			      FAIXA sugerida: 100 a 500.  Validado: 230. */
 
 %let MIN_EVENTOS     = 62;
-   /* Minimo de MAUS (eventos de FPD) para a celula ter FPD confiavel. Protege a
-      taxa de inadimplencia de ser estimada sobre pouquissimos maus.
-      EFEITO: aumentar  -> FPD por celula mais confiavel, porem mais colapso.
-              diminuir  -> FPD mais granular, porem ruidoso em celulas pequenas.
-      Regra de bolso: ~ MIN_N x FPD_global  (FPD global ~27% => ~62).
-      FAIXA sugerida: 30 a 120.  Validado: 62. */
+			   /* Minimo de MAUS (eventos de FPD) para a celula ter FPD confiavel. Protege a
+			      taxa de inadimplencia de ser estimada sobre pouquissimos maus.
+			      EFEITO: aumentar  -> FPD por celula mais confiavel, porem mais colapso.
+			              diminuir  -> FPD mais granular, porem ruidoso em celulas pequenas.
+			      Regra de bolso: ~ MIN_N x FPD_global  (FPD global ~27% => ~62).
+			      FAIXA sugerida: 30 a 120.  Validado: 62. */
 
 /* --- 3) Operacao das macros ------------------------------------------------ */
-%let MODO            = ANALITICA;  /* ANALITICA (1 linha/proposta) ou SUMARIZADA */
-%let BACKTEST        = AUTO;       /* AUTO | SIM | NAO (so roda se houver reais)  */
+%let MODO            = SUMARIZADA;  /* ANALITICA (1 linha/proposta) ou SUMARIZADA */
+%let BACKTEST        = AUTO;       /* AUTO | SIM | NAO (so roda se houver reais)  */;
+
+%macro gerar_base_segmentada(
+    ds_in=,
+    ds_out=,
+    var_seg=,
+	ini_safra=,
+	fim_safra=,
+    col_aprovados=,
+    col_convertidos=,
+    col_maus=
+);
+
+    %local i n var;
+
+    /* monta dinamicamente o SELECT e GROUP BY */
+    %let n = %sysfunc(countw(&var_seg));
+
+    proc sql;
+        create table &ds_out as
+        select 
+        
+        /* variáveis de segmentação */
+        %do i=1 %to &n;
+            %let var = %scan(&var_seg, &i);
+            &var
+            %if &i < &n %then ,;
+        %end;
+        ,
+
+        /* agregações */
+        sum(&col_aprovados)   as &col_aprovados,
+        sum(&col_convertidos) as &col_convertidos,
+        sum(&col_maus)        as &col_maus
+
+        from &ds_in
+		where SAFRA_CNST >= &ini_safra. and SAFRA_CNST <= &fim_safra.
+        group by
+        %do i=1 %to &n;
+            %let var = %scan(&var_seg, &i);
+            &var
+            %if &i < &n %then ,;
+        %end;
+        ;
+
+    quit;
+
+%mend;
+
+
 
 
 /* ============================================================================
@@ -111,6 +230,8 @@ options validvarname=v7;
      nivel, vars_usadas, <vars do nivel>, n_aprovados, n_convertidos, n_maus,
      taxa_conversao_ref, taxa_fpd_ref, confiabilidade (ALTA/MEDIA/BAIXA/GLOBAL).
    ============================================================================ */
+
+
 %macro gerar_inferencia(
     ds_base=,
     var_seg=,
@@ -212,6 +333,7 @@ options validvarname=v7;
     title;
 
 %mend gerar_inferencia;
+
 
 
 /* ============================================================================
@@ -373,6 +495,7 @@ options validvarname=v7;
 %mend aplicar_inferencia;
 
 
+
 /* ============================================================================
    MACRO 3 - %exportar_simulador
    ----------------------------------------------------------------------------
@@ -450,7 +573,7 @@ options validvarname=v7;
     proc datasets library=work nolist; delete _exp_ref; quit;
 
     %put NOTE: ===== exportar_simulador: &n_lin linhas exportadas -> &caminho_csv =====;
-    %put NOTE:       Leve este CSV + CONTRATO_INFERENCIA.md para o App Simulador.;
+
 
 %mend exportar_simulador;
 
@@ -469,7 +592,7 @@ options validvarname=v7;
    datasets temporarios em WORK e nao toca nas suas bases.
 
    ds_base         base historica observada (com aprovados, altas e maus reais).
-   var_seg/col_*/min_n/min_eventos : default = bloco de PARAMETROS do topo.
+   var_seg/col_/min_n/min_eventos : default = bloco de PARAMETROS do topo.
    sensibilidade   NAO (default) | SIM. Se SIM, re-roda variando MIN_N e
                    MIN_EVENTOS (fatores 0.5 / 1.5 / 2.0 do valor atual) e mostra
                    uma tabela comparativa - responde na pratica a pergunta
@@ -477,15 +600,74 @@ options validvarname=v7;
 
    SAIDA: prints no log + dataset work._vc_res (1 linha por cenario testado).
    ============================================================================ */
+
+   /* helper interno: roda 1 cenario e empilha as metricas em work._vc_res.
+   Le ds_base/var_seg/col_peso do escopo da macro mae; escreve as somas
+   nas macro vars _apr.._cobG (locais da macro mae). */
+%macro _vc_eval(p_min_n, p_min_eve, p_cenario);
+    %gerar_inferencia(
+        ds_base=&ds_base, var_seg=&var_seg, col_aprovados=&col_aprovados,
+        col_convertidos=&col_convertidos, col_maus=&col_maus,
+        ds_ref=work._vc_ref, min_n=&p_min_n, min_eventos=&p_min_eve);
+
+    %aplicar_inferencia(
+        ds_novo=&ds_base, ds_ref=work._vc_ref, var_seg=&var_seg,
+        ds_out=work._vc_out, col_aprovados=&col_aprovados, modo=ANALITICA,
+        col_convertidos=&col_convertidos, col_maus=&col_maus, backtest=NAO);
+
+    proc sql noprint;
+        select
+            sum(&peso),
+            sum(&col_convertidos),
+            sum(fisico_altas),
+            sum(&col_maus),
+            sum(fisico_maus),
+            sum(case when confiabilidade_premissa='ALTA'   then &peso else 0 end),
+            sum(case when confiabilidade_premissa='GLOBAL' then &peso else 0 end)
+        into :_apr trimmed, :_alr trimmed, :_ali trimmed,
+             :_mar trimmed, :_mai trimmed, :_cobA trimmed, :_cobG trimmed
+        from work._vc_out where prob_conversao is not null;
+    quit;
+
+    data _vc_row;
+        length cenario $20;
+        cenario          = "&p_cenario";
+        min_n            = &p_min_n;
+        min_eventos      = &p_min_eve;
+        aprovados        = &_apr;
+        cobertura_alta   = &_cobA / &_apr;
+        cobertura_global = &_cobG / &_apr;
+        fpd_real         = &_mar / &_alr;
+        fpd_inf          = &_mai / &_ali;
+        desvio_fpd       = (&_mai/&_ali - &_mar/&_alr) / (&_mar/&_alr);
+        desvio_altas     = (&_ali - &_alr) / &_alr;
+        format cobertura_alta cobertura_global fpd_real fpd_inf
+               desvio_fpd desvio_altas percent8.2  aprovados comma20.;
+        label cenario          = "Cenario"
+              min_n            = "MIN_N"
+              min_eventos      = "MIN_EVENTOS"
+              aprovados        = "Aprovados c/ premissa"
+              cobertura_alta   = "% aprov. premissa ALTA"
+              cobertura_global = "% aprov. premissa GLOBAL"
+              fpd_real         = "FPD real"
+              fpd_inf          = "FPD inferido"
+              desvio_fpd       = "Desvio rel. FPD (inf-real)"
+              desvio_altas     = "Desvio rel. altas (inf-real)";
+    run;
+
+    proc append base=work._vc_res data=_vc_row force; run;
+%mend _vc_eval;
+
+
 %macro validar_confianca(
     ds_base=,
-    var_seg=&VAR_SEG,
-    col_aprovados=&COL_APROVADOS,
-    col_convertidos=&COL_CONVERTIDOS,
-    col_maus=&COL_MAUS,
-    min_n=&MIN_N,
-    min_eventos=&MIN_EVENTOS,
-    sensibilidade=NAO
+    var_seg=,
+    col_aprovados=,
+    col_convertidos=,
+    col_maus=,
+    min_n=,
+    min_eventos=,
+    sensibilidade=
 );
 
     %local peso _apr _alr _ali _mar _mai _cobA _cobG
@@ -498,62 +680,7 @@ options validvarname=v7;
         %return;
     %end;
 
-    /* helper interno: roda 1 cenario e empilha as metricas em work._vc_res.
-       Le ds_base/var_seg/col_*/peso do escopo da macro mae; escreve as somas
-       nas macro vars _apr.._cobG (locais da macro mae). */
-    %macro _vc_eval(p_min_n, p_min_eve, p_cenario);
-        %gerar_inferencia(
-            ds_base=&ds_base, var_seg=&var_seg, col_aprovados=&col_aprovados,
-            col_convertidos=&col_convertidos, col_maus=&col_maus,
-            ds_ref=work._vc_ref, min_n=&p_min_n, min_eventos=&p_min_eve);
 
-        %aplicar_inferencia(
-            ds_novo=&ds_base, ds_ref=work._vc_ref, var_seg=&var_seg,
-            ds_out=work._vc_out, col_aprovados=&col_aprovados, modo=ANALITICA,
-            col_convertidos=&col_convertidos, col_maus=&col_maus, backtest=NAO);
-
-        proc sql noprint;
-            select
-                sum(&peso),
-                sum(&col_convertidos),
-                sum(fisico_altas),
-                sum(&col_maus),
-                sum(fisico_maus),
-                sum(case when confiabilidade_premissa='ALTA'   then &peso else 0 end),
-                sum(case when confiabilidade_premissa='GLOBAL' then &peso else 0 end)
-            into :_apr trimmed, :_alr trimmed, :_ali trimmed,
-                 :_mar trimmed, :_mai trimmed, :_cobA trimmed, :_cobG trimmed
-            from work._vc_out where prob_conversao is not null;
-        quit;
-
-        data _vc_row;
-            length cenario $20;
-            cenario          = "&p_cenario";
-            min_n            = &p_min_n;
-            min_eventos      = &p_min_eve;
-            aprovados        = &_apr;
-            cobertura_alta   = &_cobA / &_apr;
-            cobertura_global = &_cobG / &_apr;
-            fpd_real         = &_mar / &_alr;
-            fpd_inf          = &_mai / &_ali;
-            desvio_fpd       = (&_mai/&_ali - &_mar/&_alr) / (&_mar/&_alr);
-            desvio_altas     = (&_ali - &_alr) / &_alr;
-            format cobertura_alta cobertura_global fpd_real fpd_inf
-                   desvio_fpd desvio_altas percent8.2  aprovados comma20.;
-            label cenario          = "Cenario"
-                  min_n            = "MIN_N"
-                  min_eventos      = "MIN_EVENTOS"
-                  aprovados        = "Aprovados c/ premissa"
-                  cobertura_alta   = "% aprov. premissa ALTA"
-                  cobertura_global = "% aprov. premissa GLOBAL"
-                  fpd_real         = "FPD real"
-                  fpd_inf          = "FPD inferido"
-                  desvio_fpd       = "Desvio rel. FPD (inf-real)"
-                  desvio_altas     = "Desvio rel. altas (inf-real)";
-        run;
-
-        proc append base=work._vc_res data=_vc_row force; run;
-    %mend _vc_eval;
 
     proc datasets library=work nolist; delete _vc_res; quit;
 
@@ -638,60 +765,214 @@ options validvarname=v7;
 %mend validar_confianca;
 
 
+
 /* ============================================================================
    EXEMPLO DE USO (descomente e ajuste os nomes).
    Os parametros vem do bloco "PARAMETROS DE ENTRADA" do topo do arquivo, entao
-   aqui voce so aponta as BASES. P/ mudar thresholds/segmentacao, edite la em cima.
+   aqui voce so aponta as BASES. P/ mudar thresholds/segmentacao, edite la em cima.*/
 
-   LIBNAME INF "/sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/INFERENCIA";
+ 
 
-   * 1) Gerar a tabela de referencia a partir da base historica observada;
-   %gerar_inferencia(
-       ds_base         = INF.BASE_MODELAGEM_AM,
-       var_seg         = &VAR_SEG,
-       col_aprovados   = &COL_APROVADOS,
-       col_convertidos = &COL_CONVERTIDOS,
-       col_maus        = &COL_MAUS,
-       ds_ref          = INF.TABELA_REF_MV,
-       min_n           = &MIN_N,
-       min_eventos     = &MIN_EVENTOS
-   );
+/*SUMARIZAR A TABELA PARA GERAR A REFERENCIA, RECOMENDÁVEL PARA UMA EXECUÇÃO MAIS RAPIDA*/
+%gerar_base_segmentada(
+    ds_in=INF.LOG_FPD_SUM,
+    ds_out=WORK.BASE_ENTRADA_TST_SMPL,
+    var_seg=&var_seg.,
+	ini_safra=202509,
+	fim_safra=202603,
+    col_aprovados=&COL_APROVADOS.,
+    col_convertidos=&COL_CONVERTIDOS.,
+    col_maus=&COL_MAUS.
+);
 
-   * 1b) Exportar a tabela de referencia (CSV) para o App Simulador de Credito.
-        Leve o CSV + CONTRATO_INFERENCIA.md p/ a sessao do app;
-   %exportar_simulador(
-       ds_ref      = INF.TABELA_REF_MV,
-       caminho_csv = /sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/INFERENCIA/inferencia_ref.csv,
-       var_seg     = &VAR_SEG
-   );
 
-   * 2a) Backtest: aplicar na propria base historica (tem os reais);
-   %aplicar_inferencia(
-       ds_novo         = INF.BASE_MODELAGEM_AM,
-       ds_ref          = INF.TABELA_REF_MV,
-       var_seg         = &VAR_SEG,
-       ds_out          = INF.BASE_MODELAGEM_AM_INF,
-       col_aprovados   = &COL_APROVADOS,
-       modo            = &MODO,
-       col_convertidos = &COL_CONVERTIDOS,
-       col_maus        = &COL_MAUS,
-       backtest        = &BACKTEST
-   );
 
-   * 2b) Simulacao: aplicar na base nova (sem reais, so prob/fisico);
-   %aplicar_inferencia(
-       ds_novo       = INF.LOG_05_06_MV,
-       ds_ref        = INF.TABELA_REF_MV,
-       var_seg       = &VAR_SEG,
-       ds_out        = INF.LOG_05_06_MV_INF,
-       col_aprovados = &COL_APROVADOS,
-       modo          = &MODO
-   );
+/* ============================================================================
+   MACRO 1 - %GERAR_INFERENCIA
+   ----------------------------------------------------------------------------
+   ds_base         base com as variaveis de segmentacao e as 3 colunas abaixo.
+   var_seg         vars de segmentacao (1a = score = ancora). Ex.:
+                   SCORE_HVI3 IDENTIFICA_GRUPO_MODELO CANAL_PCO_AJUSTADO
+   col_aprovados   flag (0/1) ou contagem de aprovados.
+   col_convertidos flag (0/1) ou contagem de convertidos (altas).
+   col_maus        flag (0/1) ou contagem de maus (FPD; missing p/ nao-altas).
+   ds_ref          dataset de saida (tabela de referencia).
+   min_n           minimo de aprovados p/ a celula ser usavel  (default 230).
+   min_eventos     minimo de maus p/ a celula ser usavel       (default 62).
 
-   * 3) OPCIONAL - validar a confianca antes de simular (gera + aplica + mede).
-        sensibilidade=SIM tambem testa MIN_N/MIN_EVENTOS maiores e menores;
-   %validar_confianca(
-       ds_base       = INF.BASE_MODELAGEM_AM,
-       sensibilidade = SIM
-   );
+   SAIDA (&ds_ref): uma linha por celula valida em cada nivel + 1 linha GLOBAL.
+     nivel, vars_usadas, <vars do nivel>, n_aprovados, n_convertidos, n_maus,
+     taxa_conversao_ref, taxa_fpd_ref, confiabilidade (ALTA/MEDIA/BAIXA/GLOBAL).
    ============================================================================ */
+
+%gerar_inferencia(
+    ds_base=WORK.BASE_ENTRADA_TST_SMPL,
+    var_seg=&var_seg.,
+    col_aprovados=&COL_APROVADOS.,
+    col_convertidos=&COL_CONVERTIDOS.,
+    col_maus=&COL_MAUS.,
+    ds_ref=INF.INFERENCIA_REF_202509_202603,
+    min_n=&MIN_N,
+    min_eventos=&MIN_EVENTOS
+);
+
+
+/* ============================================================================
+   MACRO 2 - %APLICAR_INFERENCIA
+   ----------------------------------------------------------------------------
+   ds_novo         base a enriquecer (analitica OU sumarizada). Precisa das
+                   mesmas var_seg da tabela de referencia.
+   ds_ref          tabela de referencia gerada por %gerar_inferencia.
+   var_seg         mesmas vars (mesma ordem) usadas na geracao.
+   ds_out          dataset de saida enriquecido.
+   col_aprovados   flag/contagem de aprovados em ds_novo (usado como peso).
+   peso            coluna que pondera os fisicos (default = col_aprovados).
+   modo            ANALITICA (cria prob_mau) ou SUMARIZADA (default ANALITICA).
+   col_convertidos / col_maus
+                   reais observados em ds_novo, SE existirem (p/ backtest).
+   backtest        AUTO (roda se a base tiver os reais) | SIM | NAO.
+
+   SAIDA (&ds_out): ds_novo + prob_conversao, prob_fpd, [prob_mau],
+     fisico_altas, fisico_maus, nivel_premissa, confiabilidade_premissa.
+
+   FISICOS / REGRAS DE OURO:
+     fisico_altas = peso * prob_conversao
+     fisico_maus  = peso * prob_conversao * prob_fpd
+     Taxa de FPD inferida = SUM(fisico_maus)/SUM(fisico_altas)
+     prob_mau = prob_conversao*prob_fpd SO faz sentido na base ANALITICA.
+   ============================================================================ */
+
+
+%aplicar_inferencia(
+    ds_novo=INF.LOG_FPD_SUM,
+    ds_ref=INF.INFERENCIA_REF_202509_202603,
+    var_seg=&var_seg.,
+    ds_out=INF.LOG_FPD_SUM_INF_BACK,
+    col_aprovados=&COL_APROVADOS.,
+    peso=&COL_PROPOSTAS.,
+    modo=SUMARIZADA,
+    col_convertidos=&COL_CONVERTIDOS.,
+    col_maus=&COL_MAUS.,
+    backtest=AUTO
+);
+
+/*%aplicar_inferencia(*/
+/*    ds_novo=WORK.BASE_ENTRADA_TST_SMPL,*/
+/*    ds_ref=INF.BASE_ENTRADA_TST_SMPL,*/
+/*    var_seg=&var_seg.,*/
+/*    ds_out=INF.BASE_ENTRADA_TST_SMPL_INF,*/
+/*    col_aprovados=&COL_APROVADOS.,*/
+/*    peso=&COL_APROVADOS.,*/
+/*    modo=SUMARIZADA,*/
+/*    col_convertidos=,*/
+/*    col_maus=,*/
+/*    backtest=NAO*/
+/*);*/
+
+/* ============================================================================
+   MACRO 3 - %exportar_simulador
+   ----------------------------------------------------------------------------
+   Exporta a TABELA DE REFERENCIA (saida do %gerar_inferencia) para um CSV que
+   o App Simulador de Credito consome. NAO aplica nada: so serializa as taxas
+   por celula, em TODOS os niveis hierarquicos, p/ o app fazer a cascata em
+   runtime contra a base que o usuario subir.
+
+   POR QUE SO A TABELA DE REFERENCIA (e nao uma base ja inferida):
+     A geracao das taxas (este repo, SAS) e independente da base de estudo. A
+     aplicacao (cascata + fisicos) depende de QUAL base o usuario sobe no app,
+     entao acontece la, em runtime. O contrato completo (colunas, algoritmo de
+     cascata, fisicos e regras de ouro) esta em CONTRATO_INFERENCIA.md.
+
+   ESTRUTURA DO CSV (delimitador ';', decimal '.', cabecalho = nomes das vars):
+       nivel               1=mais granular ... (n_vars+1)=GLOBAL
+       confiabilidade      ALTA / MEDIA / BAIXA / GLOBAL
+       <vars de var_seg>   chaves; nos niveis colapsados as vars descartadas
+                           ficam EM BRANCO (curinga); GLOBAL = todas em branco
+       taxa_conversao_ref  P(converte | aprovado)
+       taxa_fpd_ref        P(inadimple | converteu)
+       n_aprovados / n_convertidos / n_maus   amostra que embasa a celula
+                           (so se incluir_amostra=SIM)
+       vars_usadas         lista textual das vars do nivel (apoio/auditoria)
+
+   PARAMETROS:
+     ds_ref           tabela de referencia gerada pelo %gerar_inferencia.
+     caminho_csv      arquivo CSV de saida (ex.: .../inferencia_ref.csv).
+     var_seg          mesmas vars (mesma ordem) da geracao (default &VAR_SEG).
+     incluir_amostra  SIM (default) inclui n_aprovados/n_convertidos/n_maus;
+                      NAO exporta so as taxas + confiabilidade.
+   ============================================================================ */
+
+%exportar_simulador(
+    ds_ref=INF.INFERENCIA_REF_202509_202603,
+    caminho_csv=/sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/Exports/INFERENCIA_REF_202509_202603.CSV,
+    var_seg=&var_seg.,
+    incluir_amostra=SIM
+);
+
+
+/* ============================================================================
+   MACRO 4 (OPCIONAL) - %validar_confianca
+   ----------------------------------------------------------------------------
+   Roda a inferencia COMPLETA (gerar + aplicar como backtest) sobre a base
+   historica observada e mede se o resultado e confiavel:
+     - cobertura por confiabilidade (% de aprovados com premissa ALTA / GLOBAL);
+     - desvio inferido x real, de ALTAS e de FPD.
+   Imprime um VEREDITO (CONFIAVEL / ATENCAO / REVISAR) e RECOMENDACOES ligadas
+   aos parametros - inclusive se vale a pena mexer em MIN_N / MIN_EVENTOS.
+
+   E OPCIONAL: serve p/ dar seguranca ANTES de simular. Nao altera o fluxo - usa
+   datasets temporarios em WORK e nao toca nas suas bases.
+
+   ds_base         base historica observada (com aprovados, altas e maus reais).
+   var_seg/col_/min_n/min_eventos : default = bloco de PARAMETROS do topo.
+   sensibilidade   NAO (default) | SIM. Se SIM, re-roda variando MIN_N e
+                   MIN_EVENTOS (fatores 0.5 / 1.5 / 2.0 do valor atual) e mostra
+                   uma tabela comparativa - responde na pratica a pergunta
+                   "e se eu aumentar/diminuir esse parametro, melhora?".
+
+   SAIDA: prints no log + dataset work._vc_res (1 linha por cenario testado).
+   ============================================================================ */
+
+
+%validar_confianca(
+    ds_base=INF.LOG_FPD_SUM_INF_BACK,
+    var_seg=&VAR_SEG,
+    col_aprovados=&COL_APROVADOS,
+    col_convertidos=&COL_CONVERTIDOS,
+    col_maus=&COL_MAUS,
+    min_n=&MIN_N,
+    min_eventos=&MIN_EVENTOS,
+    sensibilidade=SIM
+);
+
+
+   ============================================================================ */;
+
+
+
+/*Extrair*/
+LIBNAME INF "/sasdata/Credito_Estudos/POL/ARTHUR_FONTANA/INFERENCIA";
+
+proc contents data=INF.LOG_FPD_SUM_INF_BACK; run;
+
+PROC SQL;
+CREATE TABLE LOG_FPD_SUM AS 
+SELECT 
+	 SAFRA_CNST 
+	,OPERACAO 
+	,TP_PEDIDO 
+	,DECISAO_ANALISE 
+	,IDENTIFICA_GRUPO_MODELO 
+	,confiabilidade_premissa
+	,SUM(FL_PROPOSTA) AS FL_PROPOSTA
+	,SUM(FL_APROVADOS) AS FL_APROVADOS
+	,SUM(FL_ALTAS) AS FL_ALTAS
+	,SUM(FL_ATRS_PARC_OVER_30) AS FL_ATRS_PARC_OVER_30
+	,SUM(FL_ATRS_PARC_OVER_60) AS FL_ATRS_PARC_OVER_60
+	,SUM(fisico_altas) as FL_ALTAS_INF
+	,SUM(fisico_maus) AS FL_ATRS_PARC_OVER_30_INF
+FROM INF.LOG_FPD_SUM_INF_BACK
+GROUP BY 1,2,3,4,5,6;
+RUN;
+QUIT;
+
